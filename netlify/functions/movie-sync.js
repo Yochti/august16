@@ -2,17 +2,19 @@
 //
 // Same idea as map-sync.js, for movie night: play/pause/seek state and
 // reactions, stored in Netlify Blobs, polled by both phones every couple
-// of seconds. No server, no VPS, no WebSocket — works the moment this
-// site is deployed on Netlify (same rules as map-sync.js: this file must
-// live at netlify/functions/movie-sync.js, and netlify.toml must be named
-// exactly that, at the repo root).
+// of seconds. No server, no VPS, no WebSocket.
+//
+// Content (playback + reactions) and presence (heartbeats) are stored in
+// TWO SEPARATE keys, same reasoning as map-sync.js: a presence-only
+// heartbeat must never read-then-rewrite the content key, or it can race
+// with and roll back a real play/pause/seek/reaction.
 //
 //   GET  /.netlify/functions/movie-sync?room=CODE
-//        -> { playback: {type,time,updatedAt,updatedBy}, reactions: [...], presence } or null
+//        -> { playback, reactions, presence } or defaults
 //
 //   POST /.netlify/functions/movie-sync?room=CODE
 //        body: { who, playback?: {type, time}, reaction?: {emoji} }
-//        -> saves it and returns the new stored state
+//        -> saves it (if present) and returns the current state
 //
 import { getStore } from "@netlify/blobs";
 
@@ -30,11 +32,20 @@ export default async (request) => {
   }
 
   const store = getStore({ name: "aug16-sync", consistency: "strong" });
-  const key = "movie:" + room;
+  const contentKey = "movie:content:" + room;
+  const presenceKey = "movie:presence:" + room;
 
   if (request.method === "GET") {
-    const data = await store.get(key, { type: "json" });
-    return new Response(JSON.stringify(data || null), {
+    const [content, presence] = await Promise.all([
+      store.get(contentKey, { type: "json" }),
+      store.get(presenceKey, { type: "json" }),
+    ]);
+    const merged = {
+      playback: (content && content.playback) || null,
+      reactions: (content && content.reactions) || [],
+      presence: presence || {},
+    };
+    return new Response(JSON.stringify(merged), {
       headers: { "content-type": "application/json" },
     });
   }
@@ -47,27 +58,36 @@ export default async (request) => {
       return new Response(JSON.stringify({ error: "bad json" }), { status: 400 });
     }
 
-    const existing = (await store.get(key, { type: "json" })) || {};
     const who = String(body.who || "unknown").slice(0, 40);
+    const hasContent = !!(body.playback || body.reaction);
 
-    const playback = body.playback
-      ? { type: body.playback.type, time: body.playback.time, updatedAt: Date.now(), updatedBy: who }
-      : existing.playback || null;
+    // Presence: always refreshed, always its own independent key.
+    const existingPresence = (await store.get(presenceKey, { type: "json" })) || {};
+    const newPresence = { ...existingPresence, [who]: Date.now() };
+    await store.setJSON(presenceKey, newPresence);
 
-    let reactions = existing.reactions || [];
-    if (body.reaction) {
-      reactions = [...reactions, { emoji: String(body.reaction.emoji || "❤️").slice(0, 8), who, ts: Date.now() }]
-        .slice(-MAX_REACTIONS);
+    // Content: only read-modified when there's an actual playback event or
+    // reaction to record -- a heartbeat never touches this key.
+    let contentOut;
+    if (hasContent) {
+      const existingContent = (await store.get(contentKey, { type: "json" })) || {};
+      const playback = body.playback
+        ? { type: body.playback.type, time: body.playback.time, updatedAt: Date.now(), updatedBy: who }
+        : existingContent.playback || null;
+
+      let reactions = existingContent.reactions || [];
+      if (body.reaction) {
+        reactions = [...reactions, { emoji: String(body.reaction.emoji || "❤️").slice(0, 8), who, ts: Date.now() }]
+          .slice(-MAX_REACTIONS);
+      }
+
+      contentOut = { playback, reactions };
+      await store.setJSON(contentKey, contentOut);
+    } else {
+      contentOut = (await store.get(contentKey, { type: "json" })) || { playback: null, reactions: [] };
     }
 
-    const merged = {
-      playback,
-      reactions,
-      presence: { ...(existing.presence || {}), [who]: Date.now() },
-    };
-
-    await store.setJSON(key, merged);
-    return new Response(JSON.stringify(merged), {
+    return new Response(JSON.stringify({ ...contentOut, presence: newPresence }), {
       headers: { "content-type": "application/json" },
     });
   }
