@@ -51,12 +51,17 @@ export default async (request) => {
 
     const existing = (await store.get(key, { type: "json" })) || {};
     const who = String(body.who || "unknown").slice(0, 40);
+    const hasContent = Array.isArray(body.markers) || Array.isArray(body.itinerary);
 
     const merged = {
       markers: Array.isArray(body.markers) ? body.markers : existing.markers || [],
       itinerary: Array.isArray(body.itinerary) ? body.itinerary : existing.itinerary || [],
-      updatedAt: Date.now(),
-      updatedBy: who,
+      // Only bump these on an actual content change — a presence-only
+      // heartbeat (no markers/itinerary in the body) must not look like
+      // "something changed" to the polling client, or it triggers a false
+      // "X updated the map" every few seconds.
+      updatedAt: hasContent ? Date.now() : (existing.updatedAt || 0),
+      updatedBy: hasContent ? who : (existing.updatedBy || null),
       presence: { ...(existing.presence || {}), [who]: Date.now() },
     };
 
