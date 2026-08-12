@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>16.08 — Babijonchik × Dinka</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* ============================================================
+   16.08 — DESIGN TOKENS
+   A private travel document for two people.
+   Visual language borrows from boarding passes, passport stamps,
+   customs forms and departure boards — because the whole site is
+   about a trip that got rebooked, not cancelled.
+   ============================================================ */
+:root{
+  --bg:            #0a0d11;
+  --bg-elevated:   #10141a;
+  --bg-card:       #12171e;
+  --surface:       rgba(255,255,255,0.035);
+  --surface-hover: rgba(255,255,255,0.06);
+  --border:        rgba(255,255,255,0.09);
+  --border-soft:   rgba(255,255,255,0.05);
+  --text:          #f2ede3;
+  --text-dim:      #a8a29a;
+  --text-faint:    #6b6660;
+  --rose:          #a34d52;
+  --rose-bright:   #c56b6f;
+  --gold:          #c7a15c;
+  --gold-dim:      #8d7745;
+  --navy:          #2e4257;
+  --navy-bright:   #4a6a89;
+  --green-stamp:   #5b7a5e;
+  --red-stamp:     #9a4a42;
+  --radius-sm: 6px;
+  --radius-md: 14px;
+  --radius-lg: 24px;
+  --serif: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', serif;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', 'SF Mono', monospace;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{background:var(--bg);color:var(--text);font-family:var(--sans);overflow-x:hidden;}
+body{
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(46,66,87,0.18), transparent 45%),
+    radial-gradient(circle at 85% 100%, rgba(163,77,82,0.10), transparent 45%),
+    var(--bg);
+}
+img{max-width:100%;display:block;}
+button{font-family:inherit;cursor:pointer;background:none;border:none;color:inherit;}
+a{color:inherit;text-decoration:none;}
+::selection{background:var(--rose);color:var(--text);}
+
+/* scrollbar */
+::-webkit-scrollbar{width:8px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
+}
+
+/* focus visibility */
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible{
+  outline:2px solid var(--gold);
+  outline-offset:2px;
+}
+
+/* ---------- layout shell ---------- */
+#app{position:relative;min-height:100vh;}
+.page{
+  min-height:100vh;
+  padding:96px 24px 64px;
+  max-width:980px;
+  margin:0 auto;
+  animation:fadeUp 0.6s var(--ease) both;
+}
+@keyframes fadeUp{
+  from{opacity:0; transform:translateY(14px);}
+  to{opacity:1; transform:translateY(0);}
+}
+.page-wide{max-width:1180px;}
+
+/* ---------- top nav ---------- */
+.topbar{
+  position:fixed; top:0; left:0; right:0; z-index:40;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:18px 24px;
+  background:linear-gradient(to bottom, rgba(10,13,17,0.92), rgba(10,13,17,0));
+  backdrop-filter:blur(6px);
+}
+.topbar-brand{
+  font-family:var(--mono); font-size:12px; letter-spacing:0.12em;
+  color:var(--text-dim); display:flex; align-items:center; gap:10px;
+}
+.topbar-brand .dot{width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold);}
+.topbar-back{
+  font-family:var(--mono); font-size:12px; letter-spacing:0.08em;
+  color:var(--text-dim); padding:8px 14px; border:1px solid var(--border-soft);
+  border-radius:100px; transition:all .25s var(--ease);
+}
+.topbar-back:hover{color:var(--text); border-color:var(--gold-dim); background:var(--surface);}
+
+/* ---------- eyebrow / labels ---------- */
+.eyebrow{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.18em; text-transform:uppercase;
+  color:var(--gold); display:flex; align-items:center; gap:8px; margin-bottom:14px;
+}
+.eyebrow::before{content:''; width:16px; height:1px; background:var(--gold-dim);}
+
+h1,h2,h3{font-family:var(--serif); font-weight:500; line-height:1.08; letter-spacing:-0.01em;}
+.h-display{font-size:clamp(38px,7vw,72px); font-style:italic; font-weight:400;}
+.h-section{font-size:clamp(26px,4vw,38px); margin-bottom:10px;}
+p.lede{font-size:17px; line-height:1.65; color:var(--text-dim); max-width:560px;}
+
+/* ---------- ticket / boarding-pass card (signature element) ---------- */
+.ticket{
+  position:relative;
+  display:grid;
+  grid-template-columns:1fr auto;
+  background:linear-gradient(155deg, var(--bg-card), var(--bg-elevated));
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  overflow:hidden;
+  transition:border-color .3s var(--ease), transform .3s var(--ease), box-shadow .3s var(--ease);
+}
+.ticket:hover{border-color:var(--gold-dim); transform:translateY(-2px); box-shadow:0 12px 30px -12px rgba(0,0,0,0.6);}
+.ticket-main{padding:22px 20px;}
+.ticket-stub{
+  width:110px; padding:22px 14px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+  border-left:1px dashed var(--border);
+  background:var(--surface);
+  position:relative;
+}
+.ticket-stub::before,.ticket-stub::after{
+  content:''; position:absolute; width:16px; height:16px; border-radius:50%;
+  background:var(--bg); left:-8px;
+}
+.ticket-stub::before{top:-8px;}
+.ticket-stub::after{bottom:-8px;}
+.ticket-time{font-family:var(--mono); font-size:19px; color:var(--text); letter-spacing:0.02em;}
+.ticket-code{font-family:var(--mono); font-size:10px; letter-spacing:0.1em; color:var(--text-faint);}
+.ticket-row{display:flex; align-items:baseline; gap:12px; margin-bottom:6px;}
+.ticket-icon{font-size:22px; line-height:1;}
+.ticket-title{font-family:var(--serif); font-size:20px; font-weight:500;}
+.ticket-desc{font-size:14px; color:var(--text-dim); line-height:1.5; margin-top:2px;}
+.ticket-locked{opacity:0.55; filter:grayscale(0.3);}
+.ticket-locked .ticket-stub{color:var(--text-faint);}
+.ticket-unlocked-badge, .ticket-locked-badge{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:0.12em; text-transform:uppercase;
+  padding:4px 8px; border-radius:100px; margin-top:4px;
+}
+.ticket-locked-badge{border:1px solid var(--border); color:var(--text-faint);}
+.ticket-unlocked-badge{
+  border:1px solid var(--green-stamp); color:#9fc2a1; background:rgba(91,122,94,0.12);
+  animation:pulseGlow 2.4s ease-in-out infinite;
+}
+@keyframes pulseGlow{
+  0%,100%{box-shadow:0 0 0 rgba(91,122,94,0);}
+  50%{box-shadow:0 0 14px rgba(91,122,94,0.35);}
+}
+
+/* ---------- stamp (locked/unlocked circular badge) ---------- */
+.stamp{
+  width:64px; height:64px; border-radius:50%;
+  border:2px solid currentColor; display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-size:10px; letter-spacing:0.08em; text-align:center;
+  transform:rotate(-8deg); flex-shrink:0;
+}
+
+/* ---------- buttons ---------- */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  font-family:var(--mono); font-size:12.5px; letter-spacing:0.06em; text-transform:uppercase;
+  padding:13px 24px; border-radius:100px; border:1px solid var(--border);
+  color:var(--text); background:var(--surface); transition:all .25s var(--ease);
+}
+.btn:hover{border-color:var(--gold-dim); background:var(--surface-hover); transform:translateY(-1px);}
+.btn-primary{
+  background:linear-gradient(135deg, var(--rose), var(--rose-bright));
+  border-color:transparent; color:#fff;
+}
+.btn-primary:hover{filter:brightness(1.08);}
+.btn-gold{border-color:var(--gold-dim); color:var(--gold);}
+.btn-sm{padding:8px 16px; font-size:11px;}
+.btn-block{width:100%;}
+.btn:disabled{opacity:0.4; cursor:not-allowed; transform:none;}
+
+/* ---------- cards / glass ---------- */
+.card{
+  background:var(--surface); border:1px solid var(--border-soft);
+  border-radius:var(--radius-md); padding:20px;
+}
+.card-glass{
+  background:rgba(255,255,255,0.035);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  backdrop-filter:blur(10px);
+}
+
+/* ---------- landing ---------- */
+.landing{
+  min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; position:relative; padding:24px; cursor:pointer;
+  gap:22px;
+}
+.landing-code{
+  font-family:var(--mono); font-size:12px; letter-spacing:0.3em; color:var(--text-faint);
+}
+.landing-title{
+  font-family:var(--serif); font-weight:500; font-size:clamp(48px,11vw,120px);
+  letter-spacing:-0.02em; line-height:0.95;
+}
+.landing-names{
+  font-family:var(--mono); font-size:clamp(13px,2.4vw,16px); letter-spacing:0.2em;
+  color:var(--gold); text-transform:uppercase;
+}
+.landing-line{
+  font-family:var(--serif); font-style:italic; font-size:clamp(17px,2.6vw,22px); color:var(--text-dim);
+  max-width:560px; opacity:0; animation:fadeUp 0.9s var(--ease) forwards;
+}
+.landing-hint{
+  position:absolute; bottom:36px; font-family:var(--mono); font-size:11px;
+  letter-spacing:0.15em; color:var(--text-faint); text-transform:uppercase;
+  display:flex; align-items:center; gap:8px;
+  animation:bob 2.2s ease-in-out infinite;
+}
+@keyframes bob{0%,100%{transform:translateY(0);}50%{transform:translateY(6px);}}
+.landing-perforation{
+  width:100%; max-width:520px; height:1px; border-top:1px dashed var(--border);
+  margin:6px 0;
+}
+
+/* ---------- transition overlay ---------- */
+#transition-veil{
+  position:fixed; inset:0; background:var(--bg); z-index:100;
+  display:flex; align-items:center; justify-content:center;
+  transition:opacity .7s var(--ease);
+}
+#transition-veil.hidden{opacity:0; pointer-events:none;}
+.veil-mark{font-family:var(--mono); font-size:12px; letter-spacing:0.2em; color:var(--text-faint);}
+
+/* ---------- dashboard header ---------- */
+.dash-header{margin-bottom:44px;}
+.dash-header .h-display{margin-bottom:10px;}
+.dash-sub{font-family:var(--mono); font-size:12.5px; color:var(--text-dim); letter-spacing:0.05em;}
+.progress-rail{
+  margin-top:26px; height:2px; background:var(--border-soft); border-radius:2px; position:relative; overflow:hidden;
+}
+.progress-fill{
+  position:absolute; inset:0; width:0%; background:linear-gradient(90deg,var(--rose),var(--gold));
+  transition:width 1s var(--ease);
+}
+
+/* ---------- timeline list ---------- */
+.timeline-list{display:flex; flex-direction:column; gap:14px; margin-top:8px;}
+
+/* ---------- generic detail page hero ---------- */
+.detail-hero{text-align:center; padding:40px 0 30px;}
+.detail-emoji{font-size:52px; margin-bottom:6px; display:block;}
+.detail-kicker{font-family:var(--serif); font-style:italic; color:var(--text-dim); font-size:17px; margin-top:10px;}
+
+/* ---------- countdown ---------- */
+.countdown{
+  display:flex; gap:14px; justify-content:center; margin:34px 0; flex-wrap:wrap;
+}
+.countdown-unit{
+  min-width:76px; text-align:center; padding:16px 10px;
+  border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface);
+}
+.countdown-num{font-family:var(--mono); font-size:30px; color:var(--gold);}
+.countdown-label{font-family:var(--mono); font-size:9.5px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-faint); margin-top:4px;}
+
+/* ---------- pizza ---------- */
+.pizza-ready{
+  text-align:center; padding:60px 20px; animation:fadeUp .8s var(--ease);
+}
+.pizza-ready .h-display{color:var(--rose-bright);}
+
+/* ---------- map ---------- */
+#astana-map{
+  width:100%; height:min(62vh, 560px); border-radius:var(--radius-md);
+  border:1px solid var(--border); overflow:hidden;
+}
+.leaflet-container{background:#0d1116 !important; font-family:var(--sans) !important;}
+.map-toolbar{
+  display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;
+}
+.chip{
+  font-family:var(--mono); font-size:11.5px; letter-spacing:0.04em; padding:9px 14px;
+  border:1px solid var(--border); border-radius:100px; color:var(--text-dim);
+  transition:all .2s var(--ease); display:flex; align-items:center; gap:6px;
+}
+.chip:hover{border-color:var(--gold-dim); color:var(--text);}
+.chip.active{background:var(--rose); color:#fff; border-color:transparent;}
+.map-layout{display:grid; grid-template-columns:1.5fr 1fr; gap:20px; margin-top:18px;}
+@media (max-width:820px){.map-layout{grid-template-columns:1fr;}}
+
+.itin-list{display:flex; flex-direction:column; gap:10px; max-height:560px; overflow-y:auto; padding-right:4px;}
+.itin-item{
+  display:flex; align-items:center; gap:12px; padding:12px 14px;
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-sm);
+  cursor:grab;
+}
+.itin-item.dragging{opacity:0.4;}
+.itin-time{font-family:var(--mono); font-size:12px; color:var(--gold); width:44px; flex-shrink:0;}
+.itin-name{flex:1; font-size:14px;}
+.itin-cat{font-size:15px;}
+.itin-remove{color:var(--text-faint); font-size:16px; padding:4px;}
+.itin-remove:hover{color:var(--red-stamp);}
+.itin-empty{
+  text-align:center; padding:40px 16px; color:var(--text-faint); font-size:13px;
+  border:1px dashed var(--border); border-radius:var(--radius-sm);
+}
+
+.popup-card{font-family:var(--sans); min-width:200px;}
+.popup-card h4{font-family:var(--serif); font-size:16px; margin-bottom:4px;}
+.popup-card .cat{font-family:var(--mono); font-size:10px; color:var(--gold); letter-spacing:0.08em; text-transform:uppercase;}
+.popup-card p{font-size:12.5px; color:#8b8680; margin:6px 0;}
+.leaflet-popup-content-wrapper{background:var(--bg-elevated); color:var(--text); border-radius:10px;}
+.leaflet-popup-tip{background:var(--bg-elevated);}
+.leaflet-popup-content{margin:12px 14px;}
+.leaflet-control-zoom a{background:var(--bg-elevated) !important; color:var(--text) !important; border-color:var(--border) !important;}
+.leaflet-control-zoom a:hover{background:var(--surface-hover) !important;}
+.leaflet-control-attribution{background:rgba(10,13,17,0.7) !important; color:var(--text-faint) !important;}
+.leaflet-control-attribution a{color:var(--text-dim) !important;}
+
+/* ---------- wishlist / places we'll go ---------- */
+.wishlist-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:16px; margin-top:20px;}
+.wish-card{
+  background:var(--surface); border:1px solid var(--border-soft); border-radius:var(--radius-md);
+  padding:20px; transition:all .25s var(--ease); position:relative; overflow:hidden;
+}
+.wish-card:hover{border-color:var(--gold-dim); transform:translateY(-3px);}
+.wish-flag{font-size:30px;}
+.wish-country{font-family:var(--serif); font-size:19px; margin:10px 0 4px;}
+.wish-why{font-size:13px; color:var(--text-dim); line-height:1.5;}
+.wish-status{
+  position:absolute; top:16px; right:16px; font-family:var(--mono); font-size:9px;
+  letter-spacing:0.08em; text-transform:uppercase; padding:4px 8px; border-radius:100px; border:1px solid var(--border);
+}
+
+/* ---------- movie ---------- */
+.cinema-frame{
+  background:#000; border-radius:var(--radius-md); overflow:hidden; border:1px solid var(--border);
+  position:relative; aspect-ratio:16/9;
+}
+.cinema-frame video{width:100%; height:100%; object-fit:contain; background:#000;}
+.cinema-controls{
+  position:absolute; left:0; right:0; bottom:0; padding:16px 18px 14px;
+  background:linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+  display:flex; flex-direction:column; gap:10px;
+}
+.cinema-bar{
+  width:100%; height:4px; background:rgba(255,255,255,0.2); border-radius:4px; position:relative; cursor:pointer;
+}
+.cinema-bar-fill{position:absolute; inset:0; width:0%; background:var(--gold); border-radius:4px;}
+.cinema-row{display:flex; align-items:center; gap:14px;}
+.cinema-btn{color:#fff; font-size:18px; opacity:0.9;}
+.cinema-btn:hover{opacity:1;}
+.cinema-time{font-family:var(--mono); font-size:11px; color:#ccc;}
+.sync-status{
+  display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10px;
+  color:var(--text-faint); margin-left:auto; letter-spacing:0.05em;
+}
+.sync-dot{width:6px; height:6px; border-radius:50%; background:var(--text-faint);}
+.sync-dot.live{background:var(--green-stamp); box-shadow:0 0 6px var(--green-stamp);}
+.sync-dot.flash{background:var(--gold); box-shadow:0 0 10px var(--gold);}
+.countdown-overlay{
+  position:absolute; inset:0; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center;
+  font-family:var(--serif); font-size:120px; color:var(--gold); z-index:5;
+}
+.reaction-row{display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;}
+.react-btn{
+  font-size:20px; padding:8px 14px; border:1px solid var(--border); border-radius:100px; background:var(--surface);
+  transition:all .2s;
+}
+.react-btn:hover{border-color:var(--gold-dim); transform:scale(1.08);}
+
+/* ---------- video / chapters ---------- */
+.chapter-list{display:flex; flex-direction:column; gap:2px; margin-top:20px;}
+.chapter-item{
+  display:flex; align-items:baseline; gap:16px; padding:14px 12px; border-radius:var(--radius-sm);
+  border-bottom:1px solid var(--border-soft); transition:background .2s;
+}
+.chapter-item:hover{background:var(--surface);}
+.chapter-time{font-family:var(--mono); font-size:12px; color:var(--gold); width:52px; flex-shrink:0;}
+.chapter-label{font-size:14.5px;}
+.chapter-item.active{background:var(--surface); border-left:2px solid var(--gold);}
+
+/* ---------- memories ---------- */
+.memory-era{margin-bottom:56px; position:relative;}
+.memory-era-label{
+  font-family:var(--mono); font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:var(--gold);
+  margin-bottom:16px; display:block;
+}
+.memory-connector{
+  width:1px; height:40px; background:linear-gradient(to bottom, var(--gold-dim), transparent);
+  margin:0 auto;
+}
+.memory-photos{display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px;}
+.memory-photo-wrap{
+  border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--border-soft);
+  background:var(--bg-elevated); aspect-ratio:4/5; position:relative;
+}
+.memory-photo-wrap img{width:100%; height:100%; object-fit:cover;}
+.memory-photo-placeholder{
+  width:100%; height:100%; display:flex; align-items:center; justify-content:center;
+  color:var(--text-faint); font-family:var(--mono); font-size:10px; text-align:center; padding:10px;
+}
+.memory-caption{font-size:12.5px; color:var(--text-dim); margin-top:8px; line-height:1.5;}
+.memory-story{font-size:14.5px; line-height:1.7; color:var(--text-dim); max-width:560px; margin-bottom:18px;}
+
+/* ---------- final letter ---------- */
+.final-locked{
+  min-height:70vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; gap:18px;
+}
+.letter-wrap{
+  max-width:560px; margin:0 auto; padding:50px 40px;
+  background:linear-gradient(160deg, var(--bg-card), var(--bg-elevated));
+  border:1px solid var(--border); border-radius:var(--radius-lg);
+  animation:fadeUp 1s var(--ease);
+}
+.letter-body{font-family:var(--serif); font-size:19px; line-height:1.85; font-style:italic; color:#e8e2d6;}
+.letter-body p{margin-bottom:20px;}
+.letter-sign{font-family:var(--mono); font-size:12px; color:var(--gold); letter-spacing:0.1em; margin-top:30px; text-align:right;}
+
+/* ---------- admin ---------- */
+#admin-toggle{
+  position:fixed; bottom:18px; right:18px; z-index:50; width:34px; height:34px; border-radius:50%;
+  border:1px solid var(--border-soft); background:var(--bg-elevated); opacity:0.25; font-size:13px;
+  display:flex; align-items:center; justify-content:center; transition:opacity .2s;
+}
+#admin-toggle:hover{opacity:1;}
+#admin-panel{
+  position:fixed; inset:0; background:rgba(6,8,10,0.92); backdrop-filter:blur(8px); z-index:200;
+  display:none; overflow-y:auto; padding:40px 20px;
+}
+#admin-panel.open{display:block;}
+.admin-inner{max-width:760px; margin:0 auto;}
+.admin-section{margin-bottom:34px; padding-bottom:28px; border-bottom:1px solid var(--border-soft);}
+.admin-section h3{font-family:var(--serif); margin-bottom:14px; font-size:20px;}
+.admin-field{margin-bottom:12px;}
+.admin-field label{display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase; color:var(--text-faint); margin-bottom:6px;}
+.admin-field input, .admin-field textarea, .admin-field select{
+  width:100%; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm);
+  color:var(--text); padding:10px 12px; font-family:var(--sans); font-size:13.5px;
+}
+.admin-field textarea{min-height:80px; resize:vertical;}
+.admin-grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.admin-list-row{display:flex; gap:8px; align-items:flex-start; margin-bottom:10px; padding:12px; background:var(--surface); border-radius:var(--radius-sm);}
+.admin-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;}
+
+/* ---------- toast ---------- */
+#toast{
+  position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--bg-elevated); border:1px solid var(--gold-dim); color:var(--text);
+  padding:12px 20px; border-radius:100px; font-family:var(--mono); font-size:12px;
+  opacity:0; transition:all .3s var(--ease); z-index:300; pointer-events:none; letter-spacing:0.03em;
+}
+#toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+/* ---------- misc ---------- */
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+@media (max-width:640px){.grid-2{grid-template-columns:1fr;} .ticket{grid-template-columns:1fr;} .ticket-stub{flex-direction:row; border-left:none; border-top:1px dashed var(--border); width:100%;}}
+.section-gap{margin-top:52px;}
+.muted{color:var(--text-faint); font-size:12.5px; font-family:var(--mono);}
+hr.dash{border:none; border-top:1px dashed var(--border); margin:40px 0;}
+</style>
+</head>
+<body>
+
+<div id="transition-veil"><div class="veil-mark">16.08</div></div>
+
+<div id="app"></div>
+
+<button id="admin-toggle" title="admin">⚙</button>
+<div id="admin-panel"></div>
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ============================================================
+   16.08 — CONFIGURATION
+   Everything you'll want to change before the day lives here.
+   Replace the file paths under /assets/... with your real files.
+   Times use Astana time (UTC+5) so the countdowns are correct
+   for the day the two of you are actually sharing.
+   ============================================================ */
+const DEFAULT_CONFIG = {
+  couple: {
+    her: "Dinka",
+    him: "Babijonchik",
+    eventDate: "2026-08-16",     // YYYY-MM-DD
+    tzOffset: "+05:00"           // Astana time
+  },
+
+  landing: {
+    line1: "We didn't get the day we imagined.",
+    line2: "So I made our own."
+  },
+
+  // The five stops of the day. time = "HH:MM" in Astana time.
+  timeline: [
+    { id:"pizza",   time:"11:00", icon:"🍕", title:"Pizza Date",
+      desc:"Same dinner, different places.", route:"pizza" },
+    { id:"astana",  time:"14:00", icon:"🌆", title:"Our Astana",
+      desc:"The day we would have spent there — built anyway.", route:"astana" },
+    { id:"video",   time:"17:00", icon:"🎥", title:"Something I Made For You",
+      desc:"A little bit of me, sent across the distance.", route:"video" },
+    { id:"movie",   time:"23:00", icon:"🎬", title:"Movie Night",
+      desc:"Same movie. Same moment. Different couch.", route:"movie" },
+    { id:"final",   time:"23:59", icon:"❤️", title:"One Last Thing",
+      desc:"", route:"final", hideDescUntilUnlocked:true }
+  ],
+
+  pizza: {
+    arrivalTime: "11:00",
+    note: "I already ordered — same order as always, split between two cities.",
+    orderInfo: "", // optional: leave note about what was ordered
+    trackingLink: "" // optional: paste the Yandex Go (or any) live tracking link once you order for real
+  },
+
+  video: {
+    src: "/assets/video/for-dinka.mp4",
+    poster: "/assets/photos/video-poster.jpg",
+    intro1: "I couldn't be there in person.",
+    intro2: "So I wanted to give you something that could at least bring a little bit of me to you.",
+    chapters: [
+      { time: "00:00", label: "Why I made this" },
+      { time: "04:32", label: "How we started" },
+      { time: "10:15", label: "My favorite memories" },
+      { time: "18:40", label: "Things I love about you" },
+      { time: "26:20", label: "What you mean to me" },
+      { time: "34:00", label: "Our future" },
+      { time: "40:00", label: "August 16" }
+    ]
+  },
+
+  movie: {
+    title: "[ MOVIE TITLE ]",
+    src: "/assets/video/movie.mp4",
+    poster: "/assets/photos/movie-poster.jpg"
+  },
+
+  finalLetter: {
+    title: "ONE LAST THING",
+    body: [
+      "This wasn't the August 16th I wanted.",
+      "I wanted to be in Astana. I wanted to sit next to you. I wanted to take you somewhere and see your face without a screen between us.",
+      "But even though I couldn't have that day with you physically, I still wanted August 16th to be ours.",
+      "This isn't the day we lost. It's the day we postponed."
+    ],
+    sign: "— Babijonchik"
+  },
+
+  // Astana map defaults — example pins so the map isn't empty on first open.
+  // isExample:true just marks these as placeholders; edit or delete them on the map.
+  astanaMarkers: [
+    { id:"seed1", lat:51.1284, lng:71.4306, name:"Bayterek Tower", category:"place",
+      notes:"The obvious one. Views from the top at golden hour.", price:"", url:"", isExample:true },
+    { id:"seed2", lat:51.1319, lng:71.4664, name:"Khan Shatyr", category:"activity",
+      notes:"Indoor beach in the middle of the steppe — has to be seen to be believed.", price:"", url:"", isExample:true },
+    { id:"seed3", lat:51.0908, lng:71.4177, name:"Nur-Astana Mosque", category:"place",
+      notes:"Quiet, enormous, worth the walk around it.", price:"", url:"", isExample:true },
+    { id:"seed4", lat:51.1300, lng:71.4450, name:"[ your café pick ]", category:"cafe",
+      notes:"Example — replace with somewhere you actually found.", price:"$", url:"", isExample:true },
+    { id:"seed5", lat:51.1210, lng:71.4500, name:"[ your dinner pick ]", category:"romantic",
+      notes:"Example — swap for the place you'd actually pick for dinner.", price:"$$", url:"", isExample:true }
+  ],
+
+  wishlist: [
+    { flag:"🇰🇿", country:"Kazakhstan", why:"The trip we're rebooking.", dreamDate:"", status:"planned" },
+    { flag:"🇫🇷", country:"France", why:"", dreamDate:"", status:"someday" },
+    { flag:"🇮🇹", country:"Italy", why:"", dreamDate:"", status:"someday" },
+    { flag:"🇯🇵", country:"Japan", why:"", dreamDate:"", status:"dream" }
+  ],
+
+  memories: [
+    { era:"THE BEGINNING", photo:"/assets/photos/beginning-1.jpg", date:"", story:"" },
+    { era:"WHEN EVERYTHING CHANGED", photo:"/assets/photos/change-1.jpg", date:"", story:"" },
+    { era:"OUR FAVORITE MOMENTS", photos:["/assets/photos/fav-1.jpg","/assets/photos/fav-2.jpg","/assets/photos/fav-3.jpg"] },
+    { era:"TODAY", photos:["/assets/photos/today-1.jpg"] }
+  ],
+
+  music: { src:"/assets/music/theme.mp3" },
+
+  // Real-time sync. "room" is the shared secret used by both — pick
+  // your own code, same value on both phones. Both channels work
+  // automatically once this site is deployed on Netlify — no server
+  // of your own to run (see /netlify/functions/).
+  sync: {
+    room: "aug16-changeme",
+    map: {
+      enabled: false,
+      endpoint: "/.netlify/functions/map-sync",
+      pollMs: 4000
+    },
+    movie: {
+      enabled: false,
+      endpoint: "/.netlify/functions/movie-sync",
+      pollMs: 1500
+    }
+  }
+};
+
+const CATEGORY_META = {
+  restaurant: { icon:"🍕", label:"Restaurant" },
+  cafe:       { icon:"☕", label:"Café" },
+  place:      { icon:"🏛️", label:"Place" },
+  activity:   { icon:"🎡", label:"Activity" },
+  romantic:   { icon:"❤️", label:"Romantic" },
+  wishlist:   { icon:"⭐", label:"Want to visit" }
+};
+
+/* ============================================================
+   STATE — persisted in this browser via localStorage.
+   Two layers:
+   - configOverride: text/content edits made from the admin panel
+   - state: runtime data (map markers, itinerary, viewed events, etc.)
+   ============================================================ */
+const LS_CONFIG = "1608_config_override";
+const LS_STATE  = "1608_state";
+
+function loadConfigOverride(){
+  try{ return JSON.parse(localStorage.getItem(LS_CONFIG)) || {}; }catch(e){ return {}; }
+}
+function saveConfigOverride(o){
+  localStorage.setItem(LS_CONFIG, JSON.stringify(o));
+}
+function deepMerge(base, override){
+  if(Array.isArray(base)) return override !== undefined ? override : base;
+  if(typeof base === "object" && base !== null){
+    const out = {...base};
+    if(override && typeof override === "object"){
+      for(const k in override){ out[k] = deepMerge(base[k], override[k]); }
+    }
+    return out;
+  }
+  return override !== undefined ? override : base;
+}
+let CONFIG = deepMerge(DEFAULT_CONFIG, loadConfigOverride());
+
+function defaultState(){
+  return {
+    markers: null,        // null = use CONFIG.astanaMarkers seed; array once user edits
+    itinerary: [],         // [{markerId, time, order}]
+    viewed: {},
+    previewUnlockAll: false,
+    reactions: [],
+    movieProgress: 0,
+    ratings: {},
+    whoAmI: null,          // set once via the small prompt — used only for display ("live with Dinka", "Added by Babijonchik")
+    clientId: null,        // random, generated once per device — used to tell "my own update" from "their update"
+    travelMode: "foot"     // "foot" | "bike" | "car" — for real routing directions
+  };
+}
+function myClientId(){
+  if(!STATE.clientId){
+    STATE.clientId = "c" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    saveState();
+  }
+  return STATE.clientId;
+}
+let STATE = Object.assign(defaultState(), (function(){
+  try{ return JSON.parse(localStorage.getItem(LS_STATE)) || {}; }catch(e){ return {}; }
+})());
+function saveState(){ localStorage.setItem(LS_STATE, JSON.stringify(STATE)); }
+
+function getMarkers(){ return STATE.markers || CONFIG.astanaMarkers.map(m=>({...m})); }
+function setMarkers(list){ STATE.markers = list; saveState(); }
+
+/* ============================================================
+   TIME UTILITIES
+   ============================================================ */
+function eventDateTime(timeStr){
+  return new Date(`${CONFIG.couple.eventDate}T${timeStr}:00${CONFIG.couple.tzOffset}`);
+}
+function isUnlocked(timeStr){
+  if(STATE.previewUnlockAll) return true;
+  return new Date() >= eventDateTime(timeStr);
+}
+function fmtCountdown(ms){
+  if(ms <= 0) return {d:0,h:0,m:0,s:0};
+  const s = Math.floor(ms/1000);
+  return {
+    d: Math.floor(s/86400),
+    h: Math.floor((s%86400)/3600),
+    m: Math.floor((s%3600)/60),
+    s: s%60
+  };
+}
+function pad2(n){ return String(n).padStart(2,"0"); }
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove("show"), 2200);
+}
+
+/* ============================================================
+   ROUTER
+   ============================================================ */
+function navigate(route){
+  window.location.hash = route ? "#"+route : "";
+}
+window.addEventListener("hashchange", render);
+
+function shell(innerHtml, {wide=false, showTop=true} = {}){
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    ${showTop ? `
+    <div class="topbar">
+      <div class="topbar-brand"><span class="dot"></span> 16.08 — ${CONFIG.couple.him.toUpperCase()} × ${CONFIG.couple.her.toUpperCase()}</div>
+      <a class="topbar-back" href="#dashboard">← Our day</a>
+    </div>` : ""}
+    <div class="page ${wide ? "page-wide" : ""}">${innerHtml}</div>
+  `;
+}
+
+/* ---------- LANDING ---------- */
+function renderLanding(){
+  document.getElementById("app").innerHTML = `
+    <div class="landing" id="landing-click">
+      <div class="landing-names">${CONFIG.couple.him} × ${CONFIG.couple.her}</div>
+      <div class="landing-title">AUGUST 16</div>
+      <div class="landing-perforation"></div>
+      <div class="landing-line" style="animation-delay:.3s">The day we were supposed to spend together.</div>
+      <div class="landing-line" style="animation-delay:1.1s">${CONFIG.landing.line1}</div>
+      <div class="landing-line" style="animation-delay:1.9s">${CONFIG.landing.line2}</div>
+      <div class="landing-code" style="opacity:0; animation:fadeUp .9s var(--ease) forwards; animation-delay:2.6s">
+        16.08.2026 · ONE DAY · TWO PEOPLE · ONE VERY LONG-DISTANCE DATE
+      </div>
+      <div class="landing-hint">Tap to begin →</div>
+    </div>
+  `;
+  document.getElementById("landing-click").addEventListener("click", ()=>{
+    navigate("dashboard");
+  });
+}
+
+/* ---------- DASHBOARD ---------- */
+function ticketHtml(item){
+  const unlocked = isUnlocked(item.time);
+  const seen = !!STATE.viewed[item.id];
+  const badge = unlocked
+    ? `<div class="ticket-unlocked-badge">${seen ? "Visited ✓" : "Now available"}</div>`
+    : `<div class="ticket-locked-badge">Unlocks ${item.time}</div>`;
+  const desc = (item.hideDescUntilUnlocked && !unlocked) ? "" : item.desc;
+  return `
+    <a class="ticket ${unlocked ? "" : "ticket-locked"}" href="${unlocked ? "#"+item.route : "javascript:void(0)"}"
+       data-locked="${!unlocked}" data-route="${item.route}">
+      <div class="ticket-main">
+        <div class="ticket-row"><span class="ticket-icon">${item.icon}</span><span class="ticket-title">${item.title}</span></div>
+        ${desc ? `<div class="ticket-desc">${desc}</div>` : ""}
+        ${badge}
+      </div>
+      <div class="ticket-stub">
+        <div class="ticket-time">${item.time}</div>
+        <div class="ticket-code">16 AUG</div>
+      </div>
+    </a>
+  `;
+}
+
+function renderDashboard(){
+  const items = CONFIG.timeline;
+  const unlockedCount = items.filter(i=>isUnlocked(i.time)).length;
+  const pct = Math.round((unlockedCount/items.length)*100);
+
+  shell(`
+    <div class="dash-header">
+      <div class="eyebrow">16 · 08 · 2026 — Astana time</div>
+      <h1 class="h-display">Our day.</h1>
+      <div class="dash-sub">${CONFIG.couple.him.toUpperCase()} × ${CONFIG.couple.her.toUpperCase()} · long-distance itinerary</div>
+      <div class="progress-rail"><div class="progress-fill" id="progress-fill" style="width:${pct}%"></div></div>
+    </div>
+
+    <div class="timeline-list">
+      ${items.map(ticketHtml).join("")}
+    </div>
+
+    <hr class="dash">
+
+    <div class="eyebrow">Always open</div>
+    <div class="grid-2">
+      <a class="card" href="#wishlist" style="display:block; transition:.25s;">
+        <div class="ticket-row"><span class="ticket-icon">🌍</span><span class="ticket-title">Places we'll go</span></div>
+        <div class="ticket-desc">Everywhere we still want to end up.</div>
+      </a>
+      <a class="card" href="#memories" style="display:block; transition:.25s;">
+        <div class="ticket-row"><span class="ticket-icon">📷</span><span class="ticket-title">Our memories</span></div>
+        <div class="ticket-desc">Everything before today.</div>
+      </a>
+    </div>
+  `);
+
+  document.querySelectorAll('.ticket[data-locked="true"]').forEach(el=>{
+    el.addEventListener("click", (e)=>{
+      e.preventDefault();
+      toast("🔒 Not yet — check back later today.");
+    });
+  });
+  document.querySelectorAll('.ticket[data-locked="false"]').forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const id = items.find(i=>i.route === el.dataset.route)?.id;
+      if(id){ STATE.viewed[id] = true; saveState(); }
+    });
+  });
+}
+
+/* ---------- PIZZA ---------- */
+let pizzaTimerInterval;
+function renderPizza(){
+  clearInterval(pizzaTimerInterval);
+  const arrival = eventDateTime(CONFIG.pizza.arrivalTime);
+  const arrived = new Date() >= arrival;
+
+  shell(`
+    <div class="detail-hero">
+      <span class="detail-emoji">🍕</span>
+      <div class="eyebrow" style="justify-content:center">Pizza date</div>
+      <h1 class="h-display">Same dinner.<br>Different places.</h1>
+      <div class="detail-kicker">${CONFIG.pizza.note}</div>
+    </div>
+
+    <div id="pizza-body"></div>
+  `);
+
+  function draw(){
+    const now = new Date();
+    const body = document.getElementById("pizza-body");
+    if(!body) return;
+    const trackingHtml = CONFIG.pizza.trackingLink
+      ? `<div style="text-align:center; margin-top:22px;">
+           <a class="btn btn-gold" href="${CONFIG.pizza.trackingLink}" target="_blank" rel="noopener">📍 Track the delivery</a>
+         </div>`
+      : "";
+    if(now >= arrival){
+      body.innerHTML = `
+        <div class="pizza-ready">
+          <h2 class="h-display">Pizza is here.</h2>
+          <p class="lede" style="margin:0 auto 26px;">Call me. ❤️</p>
+          <button class="btn btn-primary" onclick="toast('📞 Go on — call.')">Call now</button>
+        </div>
+        ${trackingHtml}
+      `;
+      clearInterval(pizzaTimerInterval);
+    } else {
+      const t = fmtCountdown(arrival - now);
+      body.innerHTML = `
+        <div class="countdown">
+          <div class="countdown-unit"><div class="countdown-num">${pad2(t.h + t.d*24)}</div><div class="countdown-label">Hours</div></div>
+          <div class="countdown-unit"><div class="countdown-num">${pad2(t.m)}</div><div class="countdown-label">Minutes</div></div>
+          <div class="countdown-unit"><div class="countdown-num">${pad2(t.s)}</div><div class="countdown-label">Seconds</div></div>
+        </div>
+        <p class="lede" style="margin:0 auto; text-align:center;">Planned arrival: <strong style="color:var(--gold)">${CONFIG.pizza.arrivalTime}</strong> · both cities, same order.</p>
+        ${CONFIG.pizza.orderInfo ? `<p class="lede" style="margin:14px auto 0; text-align:center;">${CONFIG.pizza.orderInfo}</p>` : ""}
+        ${trackingHtml}
+      `;
+    }
+  }
+  draw();
+  pizzaTimerInterval = setInterval(draw, 1000);
+}
+
+/* ---------- ASTANA MAP ---------- */
+let leafletMap, markerLayer, routeLine;
+let activeCategory = "place";
+let pendingLatLng = null;
+
+function renderAstana(){
+  shell(`
+    <div class="detail-hero" style="padding-top:0;">
+      <span class="detail-emoji">🌆</span>
+      <div class="eyebrow" style="justify-content:center">Our Astana</div>
+      <h1 class="h-display">The day we would have had.</h1>
+      <div class="detail-kicker">Tap the map to drop a pin. Build the itinerary on the right.</div>
+    </div>
+
+    <div class="map-toolbar" id="cat-toolbar">
+      ${Object.entries(CATEGORY_META).map(([key,meta])=>`
+        <button class="chip ${key===activeCategory?"active":""}" data-cat="${key}">${meta.icon} ${meta.label}</button>
+      `).join("")}
+    </div>
+
+    <div class="map-toolbar" id="mode-toolbar" style="margin-bottom:6px;">
+      ${[["foot","🚶","Walking"],["bike","🚲","Cycling"],["car","🚗","Driving"]].map(([key,icon,label])=>`
+        <button class="chip ${key===STATE.travelMode?"active":""}" data-mode="${key}">${icon} ${label}</button>
+      `).join("")}
+      <span class="sync-status" style="margin-left:auto;"><span class="sync-dot" id="sync-dot"></span> <span id="sync-label">local sync only</span></span>
+    </div>
+
+    <div class="map-layout">
+      <div id="astana-map"></div>
+      <div>
+        <div class="eyebrow">Our itinerary</div>
+        <div class="itin-list" id="itin-list"></div>
+        <div class="muted" id="route-meta" style="margin-top:10px;"></div>
+        <button class="btn btn-sm" style="margin-top:12px;" id="clear-itin-btn">Clear itinerary</button>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:14px;">Pins and the itinerary sync automatically once ⚙ → "Real-time sync" → map sync is turned on — no server to set up, it works once this site is hosted on Netlify.</p>
+  `, {wide:true});
+
+  updateSyncPill(MapSync);
+
+  document.querySelectorAll("#mode-toolbar .chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      STATE.travelMode = btn.dataset.mode;
+      saveState();
+      document.querySelectorAll("#mode-toolbar .chip").forEach(c=>c.classList.remove("active"));
+      btn.classList.add("active");
+      fetchRealRoute(true);
+    });
+  });
+
+  document.querySelectorAll("#cat-toolbar .chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      activeCategory = btn.dataset.cat;
+      document.querySelectorAll("#cat-toolbar .chip").forEach(c=>c.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  });
+  document.getElementById("clear-itin-btn").addEventListener("click", ()=>{
+    STATE.itinerary = [];
+    saveState();
+    drawItinerary();
+    drawRoute();
+    fetchRealRoute(true);
+    broadcastMapState();
+  });
+
+  initMap();
+  drawMarkers();
+  drawItinerary();
+}
+
+function initMap(){
+  leafletMap = L.map("astana-map", { zoomControl:true }).setView([51.1605, 71.4704], 12);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    subdomains: "abcd", maxZoom: 19
+  }).addTo(leafletMap);
+  markerLayer = L.layerGroup().addTo(leafletMap);
+  routeLine = L.polyline([], { color: "#c7a15c", weight: 2, opacity: 0.8, dashArray: "4,6" }).addTo(leafletMap);
+
+  leafletMap.on("click", (e)=>{
+    pendingLatLng = e.latlng;
+    openMarkerForm(null, e.latlng);
+  });
+}
+
+function drawMarkers(){
+  markerLayer.clearLayers();
+  getMarkers().forEach(m=>{
+    const meta = CATEGORY_META[m.category] || CATEGORY_META.place;
+    const icon = L.divIcon({
+      html: `<div style="font-size:22px; transform:translate(-50%,-100%); filter:drop-shadow(0 2px 4px rgba(0,0,0,.6));">${meta.icon}</div>`,
+      className: "", iconSize:[0,0]
+    });
+    const marker = L.marker([m.lat, m.lng], { icon }).addTo(markerLayer);
+    marker.bindPopup(popupHtml(m));
+    marker.on("popupopen", ()=>bindPopupButtons(m));
+  });
+  drawRoute();
+  fetchRealRoute();
+}
+
+function popupHtml(m){
+  const meta = CATEGORY_META[m.category] || CATEGORY_META.place;
+  const inItin = STATE.itinerary.some(i=>i.markerId===m.id);
+  return `
+    <div class="popup-card">
+      <div class="cat">${meta.icon} ${meta.label}${m.isExample ? " · example" : ""}</div>
+      <h4>${m.name}</h4>
+      ${m.addedBy ? `<p class="muted" style="font-size:11px;">Added by ${m.addedBy}</p>` : ""}
+      ${m.notes ? `<p>${m.notes}</p>` : ""}
+      ${m.price ? `<p>Price: ${m.price}</p>` : ""}
+      ${m.url ? `<p><a href="${m.url}" target="_blank" rel="noopener">Link ↗</a></p>` : ""}
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="btn btn-sm btn-gold" data-add-itin="${m.id}" ${inItin ? "disabled" : ""}>${inItin ? "In itinerary" : "Add to our day"}</button>
+        <button class="btn btn-sm" data-edit-marker="${m.id}">Edit</button>
+        <button class="btn btn-sm" data-del-marker="${m.id}">Delete</button>
+      </div>
+    </div>
+  `;
+}
+
+function bindPopupButtons(m){
+  const addBtn = document.querySelector(`[data-add-itin="${m.id}"]`);
+  if(addBtn) addBtn.addEventListener("click", ()=>{
+    STATE.itinerary.push({ markerId: m.id, time: "" });
+    saveState();
+    leafletMap.closePopup();
+    drawItinerary(); drawRoute(); fetchRealRoute(true);
+    broadcastMapState();
+    toast("Added to our day ✓");
+  });
+  const editBtn = document.querySelector(`[data-edit-marker="${m.id}"]`);
+  if(editBtn) editBtn.addEventListener("click", ()=>{
+    leafletMap.closePopup();
+    openMarkerForm(m, {lat:m.lat, lng:m.lng});
+  });
+  const delBtn = document.querySelector(`[data-del-marker="${m.id}"]`);
+  if(delBtn) delBtn.addEventListener("click", ()=>{
+    const list = getMarkers().filter(x=>x.id !== m.id);
+    setMarkers(list);
+    STATE.itinerary = STATE.itinerary.filter(i=>i.markerId !== m.id);
+    saveState();
+    leafletMap.closePopup();
+    drawMarkers(); drawItinerary();
+    broadcastMapState();
+  });
+}
+
+function openMarkerForm(existing, latlng){
+  const isEdit = !!existing;
+  const formHtml = `
+    <div class="popup-card" style="min-width:220px;">
+      <div class="cat">${isEdit ? "Edit pin" : "New pin — " + CATEGORY_META[activeCategory].label}</div>
+      <div class="admin-field" style="margin-top:8px;"><input id="mf-name" placeholder="Name" value="${existing?.name || ""}"></div>
+      <div class="admin-field"><input id="mf-notes" placeholder="Why we want to go" value="${existing?.notes || ""}"></div>
+      <div class="admin-field"><input id="mf-price" placeholder="Price range ($ / $$ / $$$)" value="${existing?.price || ""}"></div>
+      <div class="admin-field"><input id="mf-url" placeholder="Link (optional)" value="${existing?.url || ""}"></div>
+      <button class="btn btn-sm btn-primary btn-block" id="mf-save">Save pin</button>
+    </div>
+  `;
+  const popup = L.popup({ closeOnClick:false }).setLatLng(latlng).setContent(formHtml).openOn(leafletMap);
+  setTimeout(()=>{
+    const saveBtn = document.getElementById("mf-save");
+    if(!saveBtn) return;
+    saveBtn.addEventListener("click", ()=>{
+      ensureWhoAmI(()=>{
+        const name = document.getElementById("mf-name").value.trim() || "Untitled pin";
+        const notes = document.getElementById("mf-notes").value.trim();
+        const price = document.getElementById("mf-price").value.trim();
+        const url = document.getElementById("mf-url").value.trim();
+        let list = getMarkers();
+        if(isEdit){
+          list = list.map(m=> m.id===existing.id ? {...m, name, notes, price, url} : m);
+        } else {
+          list.push({ id:"m"+Date.now(), lat:latlng.lat, lng:latlng.lng, name, category:activeCategory, notes, price, url, isExample:false, addedBy: STATE.whoAmI });
+        }
+        setMarkers(list);
+        leafletMap.closePopup();
+        drawMarkers();
+        broadcastMapState();
+      });
+    });
+  }, 30);
+}
+
+function drawItinerary(){
+  const box = document.getElementById("itin-list");
+  if(!box) return;
+  const markers = getMarkers();
+  const items = STATE.itinerary.map(i => ({...i, marker: markers.find(m=>m.id===i.markerId)})).filter(i=>i.marker);
+  if(items.length === 0){
+    box.innerHTML = `<div class="itin-empty">Nothing yet — tap a pin on the map and choose "Add to our day."</div>`;
+    return;
+  }
+  box.innerHTML = items.map((it, idx)=>{
+    const meta = CATEGORY_META[it.marker.category] || CATEGORY_META.place;
+    return `
+      <div class="itin-item" draggable="true" data-idx="${idx}">
+        <span class="itin-cat">${meta.icon}</span>
+        <input class="itin-time-input" data-idx="${idx}" type="time" value="${it.time || ""}"
+               style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--gold); font-family:var(--mono); font-size:12px; padding:4px 6px; width:78px;">
+        <span class="itin-name">${it.marker.name}</span>
+        <button class="itin-remove" data-idx="${idx}">✕</button>
+      </div>
+    `;
+  }).join("");
+
+  box.querySelectorAll(".itin-time-input").forEach(inp=>{
+    inp.addEventListener("change", ()=>{
+      STATE.itinerary[+inp.dataset.idx].time = inp.value;
+      saveState();
+      sortItineraryByTime();
+      broadcastMapState();
+    });
+  });
+  box.querySelectorAll(".itin-remove").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      STATE.itinerary.splice(+btn.dataset.idx, 1);
+      saveState();
+      drawItinerary(); drawRoute(); fetchRealRoute(true);
+      broadcastMapState();
+    });
+  });
+
+  let dragSrc = null;
+  box.querySelectorAll(".itin-item").forEach(row=>{
+    row.addEventListener("dragstart", ()=>{ dragSrc = +row.dataset.idx; row.classList.add("dragging"); });
+    row.addEventListener("dragend", ()=> row.classList.remove("dragging"));
+    row.addEventListener("dragover", (e)=> e.preventDefault());
+    row.addEventListener("drop", (e)=>{
+      e.preventDefault();
+      const target = +row.dataset.idx;
+      if(dragSrc === null || dragSrc === target) return;
+      const arr = STATE.itinerary;
+      const [moved] = arr.splice(dragSrc, 1);
+      arr.splice(target, 0, moved);
+      saveState();
+      drawItinerary(); drawRoute(); fetchRealRoute(true);
+      broadcastMapState();
+    });
+  });
+}
+
+function sortItineraryByTime(){
+  STATE.itinerary.sort((a,b)=>{
+    if(!a.time) return 1;
+    if(!b.time) return -1;
+    return a.time.localeCompare(b.time);
+  });
+  saveState();
+  drawItinerary();
+  drawRoute();
+  fetchRealRoute(true);
+}
+
+function drawRoute(){
+  if(!routeLine) return;
+  const markers = getMarkers();
+  const pts = STATE.itinerary.map(i=>markers.find(m=>m.id===i.markerId)).filter(Boolean).map(m=>[m.lat,m.lng]);
+  routeLine.setLatLngs(pts);
+  routeLine.setStyle({ dashArray: "4,6" }); // dashed = straight-line estimate, upgraded to solid once a real route loads
+}
+
+function broadcastMapState(){
+  MapSync.push();
+}
+
+/* ============================================================
+   REAL WALKING/CYCLING/DRIVING DIRECTIONS
+   ------------------------------------------------------------
+   Uses the free OSRM demo server run by FOSSGIS — no API key.
+   Usage policy caps this at ~1 request/second and asks for
+   reasonable, non-commercial use, which is exactly what a
+   two-person itinerary is, so this debounces + caches by the
+   ordered list of stop IDs to avoid re-fetching on every render.
+   Falls back to the straight dashed line (drawn by drawRoute
+   above) if the request fails for any reason — the map never
+   breaks, it just doesn't get a fancy street-accurate line.
+   ============================================================ */
+const ROUTE_PROFILES = {
+  // routing.openstreetmap.de runs one dedicated OSRM instance per mode
+  // (routed-foot / routed-bike / routed-car). Each instance only knows
+  // one profile internally, and — confirmed via real-world reports of
+  // this exact server — still expects the URL's profile keyword to be
+  // "driving" no matter which instance you're hitting. Counterintuitive,
+  // but that's this server's quirk, not a typo.
+  foot: { base:"https://routing.openstreetmap.de/routed-foot", profile:"driving" },
+  bike: { base:"https://routing.openstreetmap.de/routed-bike", profile:"driving" },
+  car:  { base:"https://routing.openstreetmap.de/routed-car",  profile:"driving" }
+};
+let routeFetchDebounce, lastRouteKey = "";
+
+function fetchRealRoute(force){
+  const markers = getMarkers();
+  const stops = STATE.itinerary.map(i=>markers.find(m=>m.id===i.markerId)).filter(Boolean);
+  const metaBox = document.getElementById("route-meta");
+  if(stops.length < 2){ if(metaBox) metaBox.textContent = ""; return; }
+
+  const mode = STATE.travelMode || "foot";
+  const key = mode + "|" + stops.map(s=>s.id).join(",");
+  if(!force && key === lastRouteKey) return;
+  lastRouteKey = key;
+
+  clearTimeout(routeFetchDebounce);
+  routeFetchDebounce = setTimeout(async ()=>{
+    const cfg = ROUTE_PROFILES[mode] || ROUTE_PROFILES.foot;
+    const coords = stops.map(s=>`${s.lng},${s.lat}`).join(";");
+    const buildUrl = (profileKeyword) => `${cfg.base}/route/v1/${profileKeyword}/${coords}?overview=full&geometries=geojson`;
+
+    async function tryFetch(profileKeyword){
+      const res = await fetch(buildUrl(profileKeyword));
+      const data = await res.json();
+      if(data.code !== "Ok" || !data.routes || !data.routes[0]) throw new Error("no route: " + data.code);
+      return data.routes[0];
+    }
+
+    try{
+      let route;
+      try{ route = await tryFetch(cfg.profile); }
+      catch(firstErr){ route = await tryFetch(mode); } // some deployments expect the mode name instead — cheap to just try both
+      const latlngs = route.geometry.coordinates.map(([lng,lat])=>[lat,lng]);
+      if(!routeLine) return; // page navigated away while this was in flight
+      routeLine.setLatLngs(latlngs);
+      routeLine.setStyle({ dashArray: null }); // solid = a real street route
+      if(metaBox){
+        const km = (route.distance/1000).toFixed(1);
+        const mins = Math.round(route.duration/60);
+        const modeLabel = mode === "foot" ? "on foot" : mode === "bike" ? "by bike" : "driving";
+        metaBox.textContent = `≈ ${km} km · ${mins} min ${modeLabel}`;
+      }
+    }catch(err){
+      console.warn("Real routing unavailable, showing a straight line instead.", err);
+      if(metaBox) metaBox.textContent = "Real street routes unavailable right now — showing a straight line.";
+      // drawRoute() already drew the dashed straight-line fallback.
+    }
+  }, 500);
+}
+
+/* ---------- WISHLIST / PLACES WE'LL GO ---------- */
+const STATUS_META = {
+  someday: { label:"Someday", icon:"❤️" },
+  planned: { label:"Planned", icon:"✈️" },
+  dream:   { label:"Dream", icon:"🌎" },
+  visited: { label:"Visited", icon:"✅" }
+};
+function renderWishlist(){
+  shell(`
+    <div class="detail-hero" style="padding-top:0;">
+      <span class="detail-emoji">🌍</span>
+      <div class="eyebrow" style="justify-content:center">Places we'll go</div>
+      <h1 class="h-display">The list that outlives one day.</h1>
+      <div class="detail-kicker">Everywhere we still want to end up, together.</div>
+    </div>
+    <div class="wishlist-grid">
+      ${CONFIG.wishlist.map(w=>{
+        const s = STATUS_META[w.status] || STATUS_META.someday;
+        return `
+        <div class="wish-card">
+          <div class="wish-status">${s.icon} ${s.label}</div>
+          <div class="wish-flag">${w.flag}</div>
+          <div class="wish-country">${w.country}</div>
+          ${w.why ? `<div class="wish-why">${w.why}</div>` : `<div class="wish-why" style="opacity:.5;">Why we want to go — add this from the admin panel.</div>`}
+          ${w.dreamDate ? `<div class="muted" style="margin-top:8px;">Dream date: ${w.dreamDate}</div>` : ""}
+        </div>`;
+      }).join("")}
+    </div>
+    <p class="muted" style="margin-top:24px;">Add or edit destinations from the small ⚙ in the corner.</p>
+  `);
+}
+
+/* ============================================================
+   REALTIME SYNC — plain HTTP polling against small Netlify Functions
+   backed by Netlify Blobs (see /netlify/functions/). Works the moment
+   this site is deployed on Netlify: same-origin, no CORS setup, no
+   VPS, no WebSocket, nothing else to run. Both phones poll every few
+   seconds; whoever saved last wins. A few seconds of lag is
+   unnoticeable for a shared map or synced movie night.
+
+   Map and movie sync are two separate instances of the exact same
+   small pattern (poll / push / status), each pointed at its own
+   Netlify Function endpoint.
+
+   If an endpoint isn't reachable (not deployed on Netlify, or sync
+   turned off), polling just stops silently — everything else keeps
+   working exactly as before, saved locally only.
+   ============================================================ */
+function makePollSync(channelName, defaultEndpoint, defaultPollMs){
+  return {
+    _timer: null,
+    lastUpdatedAt: 0,
+    lastStatus: { connected:false, peerOnline:false },
+    _statusListeners: [],
+    _dataListeners: [],
+
+    cfg(){ return (CONFIG.sync && CONFIG.sync[channelName]) || {}; },
+    isEnabled(){ return !!(this.cfg().enabled && CONFIG.sync.room); },
+    start(){
+      this.stop();
+      if(!this.isEnabled()) return;
+      this.poll();
+      this._timer = setInterval(()=>this.poll(), this.cfg().pollMs || defaultPollMs);
+    },
+    stop(){ if(this._timer) clearInterval(this._timer); this._timer = null; },
+    _url(){
+      const base = this.cfg().endpoint || defaultEndpoint;
+      return base + (base.includes("?") ? "&" : "?") + "room=" + encodeURIComponent(CONFIG.sync.room);
+    },
+    async poll(){
+      if(!this.isEnabled()) return;
+      try{
+        const res = await fetch(this._url());
+        if(!res.ok) throw new Error("http " + res.status);
+        const data = await res.json();
+        this._setStatus(true, data);
+        if(data && data.updatedAt > this.lastUpdatedAt){
+          this.lastUpdatedAt = data.updatedAt;
+          if(data.updatedBy !== myClientId()) this._dataListeners.forEach(fn => fn(data));
+        }
+        this._heartbeat(); // tell the other side "I'm still here" even if I haven't changed anything
+      }catch(err){ this._setStatus(false, null); }
+    },
+    async _heartbeat(){
+      // A POST with no data fields — the function just refreshes my presence
+      // timestamp and leaves markers/itinerary untouched. Without this,
+      // presence only updates when someone actively edits something, so two
+      // people just looking at the page would show "waiting for them" forever.
+      try{
+        const res = await fetch(this._url(), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ who: myClientId() })
+        });
+        if(res.ok){ const data = await res.json(); this._setStatus(true, data); }
+      }catch(err){ /* the next poll cycle will retry — a missed heartbeat isn't critical */ }
+    },
+    async push(payload){
+      if(!this.isEnabled()) return;
+      try{
+        const res = await fetch(this._url(), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ who: myClientId(), ...payload })
+        });
+        if(!res.ok) throw new Error("http " + res.status);
+        const data = await res.json();
+        this.lastUpdatedAt = data.updatedAt;
+        this._setStatus(true, data);
+      }catch(err){ this._setStatus(false, null); }
+    },
+    onData(fn){ this._dataListeners.push(fn); },
+    onStatusChange(fn){ this._statusListeners.push(fn); },
+    _setStatus(connected, data){
+      const staleAfter = (this.cfg().pollMs || defaultPollMs) * 3;
+      const peerOnline = !!(connected && data && data.presence &&
+        Object.entries(data.presence).some(([id, ts]) => id !== myClientId() && (Date.now()-ts) < staleAfter));
+      this.lastStatus = { connected, peerOnline };
+      this._statusListeners.forEach(fn => fn(this.lastStatus));
+    }
+  };
+}
+
+const MapSync = makePollSync("map", "/.netlify/functions/map-sync", 4000);
+MapSync.onData((data)=>{
+  STATE.markers = data.markers || [];
+  STATE.itinerary = data.itinerary || [];
+  saveState();
+  if(window.location.hash.replace("#","") === "astana"){
+    drawMarkers(); drawItinerary(); fetchRealRoute(true);
+  }
+  toast(`🌆 ${otherPersonName()} updated the map`);
+});
+function broadcastMapStatePayload(){
+  return { markers: getMarkers(), itinerary: STATE.itinerary };
+}
+
+const MovieSync = {
+  _timer: null,
+  lastPlaybackAt: 0,
+  lastReactionTs: 0,
+  lastStatus: { connected:false, peerOnline:false },
+  _statusListeners: [],
+  _playbackListeners: [],
+  _reactionListeners: [],
+
+  cfg(){ return (CONFIG.sync && CONFIG.sync.movie) || {}; },
+  isEnabled(){ return !!(this.cfg().enabled && CONFIG.sync.room); },
+  start(){
+    this.stop();
+    if(!this.isEnabled()) return;
+    this.poll();
+    this._timer = setInterval(()=>this.poll(), this.cfg().pollMs || 1500);
+  },
+  stop(){ if(this._timer) clearInterval(this._timer); this._timer = null; },
+  _url(){
+    const base = this.cfg().endpoint || "/.netlify/functions/movie-sync";
+    return base + (base.includes("?") ? "&" : "?") + "room=" + encodeURIComponent(CONFIG.sync.room);
+  },
+  async poll(){
+    if(!this.isEnabled()) return;
+    try{
+      const res = await fetch(this._url());
+      if(!res.ok) throw new Error("http " + res.status);
+      const data = await res.json();
+      this._setStatus(true, data);
+      this._processIncoming(data);
+      this._post({}); // heartbeat -- keeps presence fresh even when nobody's actively playing/reacting
+    }catch(err){ this._setStatus(false, null); }
+  },
+  async _post(body){
+    if(!this.isEnabled()) return;
+    try{
+      const res = await fetch(this._url(), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ who: myClientId(), ...body })
+      });
+      if(!res.ok) throw new Error("http " + res.status);
+      const data = await res.json();
+      this._setStatus(true, data);
+      // mark our own write as already-seen so the next poll doesn't replay it back to us
+      if(data.playback) this.lastPlaybackAt = Math.max(this.lastPlaybackAt, data.playback.updatedAt);
+      if(data.reactions && data.reactions.length) this.lastReactionTs = Math.max(this.lastReactionTs, ...data.reactions.map(r=>r.ts));
+    }catch(err){ this._setStatus(false, null); }
+  },
+  sendPlayback(type, time){ this._post({ playback: { type, time } }); },
+  sendReaction(emoji){ this._post({ reaction: { emoji } }); },
+  _processIncoming(data){
+    if(!data) return;
+    if(data.playback && data.playback.updatedAt > this.lastPlaybackAt){
+      this.lastPlaybackAt = data.playback.updatedAt;
+      if(data.playback.updatedBy !== myClientId()){
+        this._playbackListeners.forEach(fn=>fn(data.playback));
+      }
+    }
+    if(data.reactions && data.reactions.length){
+      data.reactions.forEach(r=>{
+        if(r.ts > this.lastReactionTs && r.who !== myClientId()){
+          this._reactionListeners.forEach(fn=>fn(r));
+        }
+      });
+      this.lastReactionTs = Math.max(this.lastReactionTs, ...data.reactions.map(r=>r.ts));
+    }
+  },
+  onPlayback(fn){ this._playbackListeners.push(fn); },
+  onReaction(fn){ this._reactionListeners.push(fn); },
+  onStatusChange(fn){ this._statusListeners.push(fn); },
+  _setStatus(connected, data){
+    const staleAfter = (this.cfg().pollMs || 1500) * 4;
+    const peerOnline = !!(connected && data && data.presence &&
+      Object.entries(data.presence).some(([id, ts]) => id !== myClientId() && (Date.now()-ts) < staleAfter));
+    this.lastStatus = { connected, peerOnline };
+    this._statusListeners.forEach(fn => fn(this.lastStatus));
+  }
+};
+
+function otherPersonName(){
+  return STATE.whoAmI === CONFIG.couple.him ? CONFIG.couple.her : CONFIG.couple.him;
+}
+
+/* Shared "sync status" pill — same markup/ids on the map and movie
+   pages, only one of which is ever mounted at a time. */
+function updateSyncPill(syncModule){
+  const dot = document.getElementById("sync-dot");
+  const label = document.getElementById("sync-label");
+  if(!dot || !label) return;
+  if(!syncModule.isEnabled()){ label.textContent = "local sync only"; dot.classList.remove("live"); return; }
+  const s = syncModule.lastStatus;
+  if(s.connected && s.peerOnline){
+    label.textContent = `live with ${otherPersonName()}`;
+    dot.classList.add("live");
+  } else if(s.connected){
+    label.textContent = "synced — waiting for them";
+    dot.classList.remove("live");
+  } else {
+    label.textContent = "connecting…";
+    dot.classList.remove("live");
+  }
+}
+
+/* Small one-time prompt so a new pin can be tagged with who added it,
+   and so "live with X" shows the right name. Only asked once. */
+function ensureWhoAmI(callback){
+  if(STATE.whoAmI){ callback(); return; }
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(6,8,10,0.92);backdrop-filter:blur(6px);z-index:250;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;padding:24px;text-align:center;";
+  overlay.innerHTML = `
+    <p style="font-family:var(--serif);font-size:20px;">Quick one — which of you is this?</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+      <button class="btn btn-primary" id="whoami-him">${CONFIG.couple.him}</button>
+      <button class="btn btn-primary" id="whoami-her">${CONFIG.couple.her}</button>
+    </div>
+    <p class="muted">Just so we can show who's who. Asked once per device.</p>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#whoami-him").addEventListener("click", () => {
+    STATE.whoAmI = CONFIG.couple.him; saveState(); overlay.remove(); callback();
+  });
+  overlay.querySelector("#whoami-her").addEventListener("click", () => {
+    STATE.whoAmI = CONFIG.couple.her; saveState(); overlay.remove(); callback();
+  });
+}
+
+/* ============================================================
+   MOVIE SYNC ADAPTER
+   ------------------------------------------------------------
+   Movie play/pause/seek/react events go out over two transports:
+   - BroadcastChannel, which only reaches other tabs on this same
+     device/browser (handy for testing solo, zero cost).
+   - MovieSync, which reaches the Netlify Function and from there
+     the other person's device for real, once sync is turned on.
+   Both are harmless no-ops if unavailable.
+   ============================================================ */
+const SyncAdapter = {
+  _bc: null,
+  _listeners: [],
+  _msBound: false,
+  init(room){
+    if(this._bc) this._bc.close();
+    this._bc = new BroadcastChannel("1608-movie-" + room);
+    this._listeners = []; // avoid piling up duplicate listeners across page revisits
+    this._bc.onmessage = (e) => this._listeners.forEach(fn => fn(e.data));
+    if(!this._msBound){
+      MovieSync.onPlayback((p) => this._listeners.forEach(fn => fn({ type:p.type, time:p.time })));
+      MovieSync.onReaction((r) => this._listeners.forEach(fn => fn({ type:"react", emoji:r.emoji })));
+      this._msBound = true;
+    }
+  },
+  send(event){
+    if(this._bc) this._bc.postMessage({...event, ts: Date.now()});
+    if(event.type === "react") MovieSync.sendReaction(event.emoji);
+    else MovieSync.sendPlayback(event.type, event.time);
+  },
+  onReceive(fn){ this._listeners.push(fn); }
+};
+
+/* ---------- MOVIE NIGHT ---------- */
+let movieCountdownTimer;
+function renderMovie(){
+  SyncAdapter.init("aug16");
+  shell(`
+    <div class="detail-hero" style="padding-top:0;">
+      <div class="eyebrow" style="justify-content:center">🎬 ${CONFIG.couple.her.toUpperCase()} × ${CONFIG.couple.him.toUpperCase()} CINEMA</div>
+      <h1 class="h-display">${CONFIG.movie.title}</h1>
+      <div class="detail-kicker">Tonight's movie</div>
+    </div>
+
+    <div class="cinema-frame" id="cinema-frame">
+      <video id="movie-video" poster="${CONFIG.movie.poster}" preload="metadata"></video>
+      <div class="countdown-overlay" id="movie-countdown" style="display:none;"></div>
+      <div class="cinema-controls">
+        <div class="cinema-bar" id="cinema-bar"><div class="cinema-bar-fill" id="cinema-bar-fill"></div></div>
+        <div class="cinema-row">
+          <button class="cinema-btn" id="movie-playpause">▶</button>
+          <span class="cinema-time" id="movie-time">00:00 / 00:00</span>
+          <input type="range" id="movie-volume" min="0" max="1" step="0.05" value="1" style="width:80px; margin-left:6px;">
+          <button class="cinema-btn" id="movie-fullscreen" style="margin-left:6px;">⛶</button>
+          <span class="sync-status"><span class="sync-dot" id="sync-dot"></span> <span id="sync-label">local sync only</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="reaction-row">
+      ${["❤️","😂","😭","🔥","👀"].map(e=>`<button class="react-btn" data-emoji="${e}">${e}</button>`).join("")}
+    </div>
+    <div id="reaction-log" class="muted" style="margin-top:10px;"></div>
+
+    <p class="muted" style="margin-top:20px;">Point this at your own movie file, or paste an embeddable link, from the admin panel. Set up movie sync from ⚙ → "Real-time sync" — same as the map, no server needed, just turn it on once hosted on Netlify.</p>
+  `);
+
+  updateSyncPill(MovieSync);
+
+  const video = document.getElementById("movie-video");
+  video.src = CONFIG.movie.src;
+  video.addEventListener("error", ()=>{
+    document.getElementById("cinema-frame").insertAdjacentHTML("beforeend",
+      `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-family:var(--mono);font-size:12px;text-align:center;padding:20px;">Drop your movie file at<br>${CONFIG.movie.src}</div>`);
+  }, {once:true});
+
+  const playBtn = document.getElementById("movie-playpause");
+  const bar = document.getElementById("cinema-bar");
+  const barFill = document.getElementById("cinema-bar-fill");
+  const timeLabel = document.getElementById("movie-time");
+  const volume = document.getElementById("movie-volume");
+  const syncDot = document.getElementById("sync-dot");
+
+  let suppressBroadcast = false;
+
+  function fmtTime(s){
+    if(!isFinite(s)) return "00:00";
+    const m = Math.floor(s/60), sec = Math.floor(s%60);
+    return `${pad2(m)}:${pad2(sec)}`;
+  }
+  function updateBar(){
+    const pct = video.duration ? (video.currentTime/video.duration)*100 : 0;
+    barFill.style.width = pct + "%";
+    timeLabel.textContent = `${fmtTime(video.currentTime)} / ${fmtTime(video.duration)}`;
+  }
+  video.addEventListener("timeupdate", updateBar);
+  video.addEventListener("play", ()=>{ playBtn.textContent = "⏸"; if(!suppressBroadcast) SyncAdapter.send({type:"play", time:video.currentTime}); });
+  video.addEventListener("pause", ()=>{ playBtn.textContent = "▶"; if(!suppressBroadcast) SyncAdapter.send({type:"pause", time:video.currentTime}); });
+
+  playBtn.addEventListener("click", ()=> video.paused ? video.play() : video.pause());
+  bar.addEventListener("click", (e)=>{
+    const rect = bar.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    video.currentTime = pct * (video.duration || 0);
+    SyncAdapter.send({type:"seek", time:video.currentTime});
+  });
+  volume.addEventListener("input", ()=>{ video.volume = volume.value; }); // independent per side, not synced
+  document.getElementById("movie-fullscreen").addEventListener("click", ()=>{
+    if(video.requestFullscreen) video.requestFullscreen();
+  });
+
+  SyncAdapter.onReceive((data)=>{
+    syncDot.classList.add("flash");
+    setTimeout(()=>{ syncDot.classList.remove("flash"); }, 700);
+    suppressBroadcast = true;
+    if(Math.abs(video.currentTime - data.time) > 0.6) video.currentTime = data.time;
+    if(data.type === "play") video.play();
+    if(data.type === "pause") video.pause();
+    setTimeout(()=>suppressBroadcast=false, 150);
+  });
+
+  document.querySelectorAll(".react-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const emoji = btn.dataset.emoji;
+      SyncAdapter.send({type:"react", emoji});
+      logReaction(emoji, "You");
+    });
+  });
+  SyncAdapter.onReceive((data)=>{
+    if(data.type === "react") logReaction(data.emoji, otherPersonName());
+  });
+  function logReaction(emoji, who){
+    const log = document.getElementById("reaction-log");
+    if(!log) return;
+    log.innerHTML = `${emoji} — ${who} · just now` + (log.innerHTML ? "<br>" + log.innerHTML : "");
+  }
+
+  // "Ready? 3, 2, 1, play" — shown once per visit to this page.
+  const overlay = document.getElementById("movie-countdown");
+  overlay.style.display = "flex";
+  overlay.textContent = "Ready?";
+  let n = 3;
+  clearInterval(movieCountdownTimer);
+  setTimeout(function tick(){
+    if(n === 0){ overlay.style.display = "none"; video.play().catch(()=>{}); return; }
+    overlay.textContent = n;
+    n--;
+    setTimeout(tick, 900);
+  }, 1100);
+}
+
+/* ---------- PERSONAL VIDEO ---------- */
+function timeToSeconds(t){
+  const [m,s] = t.split(":").map(Number);
+  return m*60 + (s||0);
+}
+function renderVideo(){
+  shell(`
+    <div class="detail-hero" style="padding-top:0;">
+      <span class="detail-emoji">🎥</span>
+      <div class="eyebrow" style="justify-content:center">Something I made for you</div>
+      <p class="lede" style="margin:18px auto 0; text-align:center; font-family:var(--serif); font-style:italic; font-size:19px; color:#e8e2d6;">
+        “${CONFIG.video.intro1}”
+      </p>
+      <p class="lede" style="margin:8px auto 0; text-align:center; font-family:var(--serif); font-style:italic; font-size:19px; color:#e8e2d6;">
+        “${CONFIG.video.intro2}”
+      </p>
+    </div>
+
+    <div class="cinema-frame" id="pv-frame">
+      <video id="pv-video" poster="${CONFIG.video.poster}" controls preload="metadata"></video>
+    </div>
+
+    <div class="eyebrow section-gap">Chapters</div>
+    <div class="chapter-list" id="chapter-list">
+      ${CONFIG.video.chapters.map((c,i)=>`
+        <div class="chapter-item" data-time="${c.time}">
+          <span class="chapter-time">${c.time}</span>
+          <span class="chapter-label">${c.label}</span>
+        </div>
+      `).join("")}
+    </div>
+  `);
+
+  const video = document.getElementById("pv-video");
+  video.src = CONFIG.video.src;
+  video.addEventListener("error", ()=>{
+    document.getElementById("pv-frame").insertAdjacentHTML("beforeend",
+      `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-family:var(--mono);font-size:12px;text-align:center;padding:20px;">Drop your video file at<br>${CONFIG.video.src}</div>`);
+  }, {once:true});
+
+  document.querySelectorAll("#chapter-list .chapter-item").forEach(item=>{
+    item.addEventListener("click", ()=>{
+      video.currentTime = timeToSeconds(item.dataset.time);
+      video.play().catch(()=>{});
+    });
+  });
+  video.addEventListener("timeupdate", ()=>{
+    const chapters = [...document.querySelectorAll("#chapter-list .chapter-item")];
+    let activeIdx = 0;
+    chapters.forEach((el,i)=>{
+      if(video.currentTime >= timeToSeconds(el.dataset.time)) activeIdx = i;
+    });
+    chapters.forEach((el,i)=>el.classList.toggle("active", i===activeIdx));
+  });
+}
+
+/* ---------- MEMORIES ---------- */
+function photoWrap(src){
+  return `
+    <div class="memory-photo-wrap">
+      <img src="${src}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+      <div class="memory-photo-placeholder" style="display:none;">${src}</div>
+    </div>
+  `;
+}
+function renderMemories(){
+  shell(`
+    <div class="detail-hero" style="padding-top:0;">
+      <span class="detail-emoji">📷</span>
+      <div class="eyebrow" style="justify-content:center">Our memories</div>
+      <h1 class="h-display">Everything before today.</h1>
+    </div>
+
+    ${CONFIG.memories.map(era=>`
+      <div class="memory-era">
+        <span class="memory-era-label">${era.era}</span>
+        ${era.story ? `<p class="memory-story">${era.story}</p>` : ""}
+        ${era.date ? `<p class="muted" style="margin-bottom:14px;">${era.date}</p>` : ""}
+        <div class="memory-photos">
+          ${(era.photos || [era.photo]).filter(Boolean).map(photoWrap).join("")}
+        </div>
+      </div>
+      <div class="memory-connector"></div>
+    `).join("")}
+
+    <div class="memory-era">
+      <span class="memory-era-label">WHAT COMES NEXT</span>
+      <p class="memory-story">Astana, for real this time. Add the rest as it happens.</p>
+    </div>
+  `);
+}
+
+/* ---------- FINAL LETTER ---------- */
+function renderFinal(){
+  const unlocked = isUnlocked("23:59");
+  if(!unlocked){
+    shell(`
+      <div class="final-locked">
+        <div class="stamp" style="color:var(--text-faint);">LOCKED<br>UNTIL<br>23:59</div>
+        <h1 class="h-display">Not yet.</h1>
+        <p class="lede">This one waits until the very end of the day.</p>
+      </div>
+    `);
+    return;
+  }
+  shell(`
+    <div class="detail-hero" style="padding-top:20px;">
+      <span class="detail-emoji">❤️</span>
+      <div class="eyebrow" style="justify-content:center">${CONFIG.finalLetter.title}</div>
+    </div>
+    <div class="letter-wrap">
+      <div class="letter-body">
+        ${CONFIG.finalLetter.body.map(p=>`<p>${p}</p>`).join("")}
+      </div>
+      <div class="letter-sign">${CONFIG.finalLetter.sign}</div>
+    </div>
+  `);
+  if(!STATE.viewed.final){ STATE.viewed.final = true; saveState(); }
+}
+
+/* ============================================================
+   ADMIN PANEL
+   A lightweight editor for everything text/media-related.
+   Map pins and the itinerary are edited directly on the map —
+   this panel covers the content that lives in CONFIG.
+   ============================================================ */
+let adminDraft = null;
+
+function openAdmin(){
+  adminDraft = JSON.parse(JSON.stringify(CONFIG));
+  document.getElementById("admin-panel").innerHTML = buildAdminHtml(adminDraft);
+  document.getElementById("admin-panel").classList.add("open");
+  bindAdminHandlers();
+}
+function closeAdmin(){
+  document.getElementById("admin-panel").classList.remove("open");
+}
+
+function buildAdminHtml(d){
+  return `
+    <div class="admin-inner">
+      <div class="admin-top">
+        <h2 style="font-family:var(--serif); font-size:26px;">Edit the day</h2>
+        <button class="btn btn-sm" id="admin-close">Close ✕</button>
+      </div>
+
+      <div class="admin-section">
+        <h3>Basics</h3>
+        <div class="admin-grid2">
+          <div class="admin-field"><label>Her name</label><input data-path="couple.her" value="${d.couple.her}"></div>
+          <div class="admin-field"><label>His name</label><input data-path="couple.him" value="${d.couple.him}"></div>
+          <div class="admin-field"><label>Event date</label><input data-path="couple.eventDate" value="${d.couple.eventDate}"></div>
+          <div class="admin-field"><label>Timezone offset</label><input data-path="couple.tzOffset" value="${d.couple.tzOffset}"></div>
+        </div>
+        <div class="admin-field"><label>Landing line 1</label><input data-path="landing.line1" value="${d.landing.line1}"></div>
+        <div class="admin-field"><label>Landing line 2</label><input data-path="landing.line2" value="${d.landing.line2}"></div>
+      </div>
+
+      <div class="admin-section">
+        <h3>Timeline</h3>
+        ${d.timeline.map((t,i)=>`
+          <div class="admin-list-row">
+            <div style="flex:1;">
+              <div class="admin-grid2">
+                <div class="admin-field"><label>Time</label><input data-path="timeline.${i}.time" value="${t.time}"></div>
+                <div class="admin-field"><label>Icon</label><input data-path="timeline.${i}.icon" value="${t.icon}"></div>
+              </div>
+              <div class="admin-field"><label>Title</label><input data-path="timeline.${i}.title" value="${t.title}"></div>
+              <div class="admin-field"><label>Description</label><input data-path="timeline.${i}.desc" value="${t.desc}"></div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="admin-section">
+        <h3>Pizza date</h3>
+        <div class="admin-field"><label>Arrival time (HH:MM)</label><input data-path="pizza.arrivalTime" value="${d.pizza.arrivalTime}"></div>
+        <div class="admin-field"><label>Note</label><input data-path="pizza.note" value="${d.pizza.note}"></div>
+        <div class="admin-field"><label>Order info (optional)</label><input data-path="pizza.orderInfo" value="${d.pizza.orderInfo}"></div>
+        <div class="admin-field"><label>Live tracking link (optional — e.g. the Yandex Go delivery tracking link, paste once you actually order)</label><input data-path="pizza.trackingLink" value="${d.pizza.trackingLink}" placeholder="https://..."></div>
+      </div>
+
+      <div class="admin-section">
+        <h3>Personal video</h3>
+        <div class="admin-field"><label>Video file path</label><input data-path="video.src" value="${d.video.src}"></div>
+        <div class="admin-field"><label>Poster image path</label><input data-path="video.poster" value="${d.video.poster}"></div>
+        <div class="admin-field"><label>Intro line 1</label><input data-path="video.intro1" value="${d.video.intro1}"></div>
+        <div class="admin-field"><label>Intro line 2</label><input data-path="video.intro2" value="${d.video.intro2}"></div>
+        <label style="display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); margin:14px 0 8px;">Chapters</label>
+        <div id="chapter-editor">
+          ${d.video.chapters.map((c,i)=>`
+            <div class="admin-list-row">
+              <input data-chapter-time="${i}" value="${c.time}" style="width:70px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px;">
+              <input data-chapter-label="${i}" value="${c.label}" style="flex:1; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px;">
+              <button class="itin-remove" data-remove-chapter="${i}">✕</button>
+            </div>
+          `).join("")}
+        </div>
+        <button class="btn btn-sm" id="add-chapter-btn">+ Add chapter</button>
+      </div>
+
+      <div class="admin-section">
+        <h3>Movie night</h3>
+        <div class="admin-field"><label>Movie title</label><input data-path="movie.title" value="${d.movie.title}"></div>
+        <div class="admin-field"><label>Movie file path / URL</label><input data-path="movie.src" value="${d.movie.src}"></div>
+        <div class="admin-field"><label>Poster image path</label><input data-path="movie.poster" value="${d.movie.poster}"></div>
+      </div>
+
+      <div class="admin-section">
+        <h3>Final letter</h3>
+        <div class="admin-field"><label>Title</label><input data-path="finalLetter.title" value="${d.finalLetter.title}"></div>
+        <div class="admin-field"><label>Body (one paragraph per line)</label><textarea id="letter-body-field" style="min-height:160px;">${d.finalLetter.body.join("\n")}</textarea></div>
+        <div class="admin-field"><label>Signature</label><input data-path="finalLetter.sign" value="${d.finalLetter.sign}"></div>
+      </div>
+
+      <div class="admin-section">
+        <h3>Places we'll go</h3>
+        <div id="wishlist-editor">
+          ${d.wishlist.map((w,i)=>`
+            <div class="admin-list-row" style="flex-wrap:wrap;">
+              <input data-wish-flag="${i}" value="${w.flag}" placeholder="🇯🇵" style="width:50px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px;">
+              <input data-wish-country="${i}" value="${w.country}" placeholder="Country" style="flex:1; min-width:100px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px;">
+              <select data-wish-status="${i}" style="background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px;">
+                ${Object.entries(STATUS_META).map(([k,v])=>`<option value="${k}" ${w.status===k?"selected":""}>${v.label}</option>`).join("")}
+              </select>
+              <input data-wish-why="${i}" value="${w.why}" placeholder="Why we want to go" style="flex:2; min-width:140px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:8px;">
+              <button class="itin-remove" data-remove-wish="${i}">✕</button>
+            </div>
+          `).join("")}
+        </div>
+        <button class="btn btn-sm" id="add-wish-btn">+ Add destination</button>
+      </div>
+
+      <div class="admin-section">
+        <h3>Real-time sync</h3>
+        <div class="admin-field">
+          <label>Room code (shared secret — same on both phones)</label>
+          <input id="sync-room" value="${d.sync.room}">
+        </div>
+
+        <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border-soft);">
+          <label style="display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; margin-bottom:10px;">
+            <input type="checkbox" id="sync-map-enabled" ${d.sync.map.enabled ? "checked" : ""}>
+            Map sync — works automatically once this site is hosted on Netlify
+          </label>
+          <div class="admin-field"><label>Function endpoint</label><input id="sync-map-endpoint" value="${d.sync.map.endpoint}"></div>
+          <p class="muted">No server to run — see /netlify/functions/map-sync.js. Leave the default endpoint unless you've hosted the function elsewhere.</p>
+        </div>
+
+        <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border-soft);">
+          <label style="display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; margin-bottom:10px;">
+            <input type="checkbox" id="sync-movie-enabled" ${d.sync.movie.enabled ? "checked" : ""}>
+            Movie sync — same as map, works automatically once hosted on Netlify
+          </label>
+          <div class="admin-field"><label>Function endpoint</label><input id="sync-movie-endpoint" value="${d.sync.movie.endpoint}"></div>
+          <p class="muted">No server to run — see /netlify/functions/movie-sync.js.</p>
+        </div>
+
+        <p class="muted" id="sync-status-admin" style="margin-top:12px;"></p>
+      </div>
+
+      <div class="admin-section">
+        <h3>Preview &amp; data</h3>
+        <label style="display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:12px; margin-bottom:16px;">
+          <input type="checkbox" id="preview-unlock-toggle" ${STATE.previewUnlockAll ? "checked" : ""}>
+          Unlock everything now (preview only — turn off before sending)
+        </label>
+        <button class="btn btn-sm" id="reset-data-btn" style="border-color:var(--red-stamp); color:#e08b83;">Reset all saved data on this device</button>
+      </div>
+
+      <button class="btn btn-primary btn-block" id="admin-save-btn" style="margin-top:10px;">Save changes</button>
+    </div>
+  `;
+}
+
+function setPath(obj, path, value){
+  const parts = path.split(".");
+  let cur = obj;
+  for(let i=0;i<parts.length-1;i++) cur = cur[parts[i]];
+  cur[parts[parts.length-1]] = value;
+}
+
+function bindAdminHandlers(){
+  document.getElementById("admin-close").addEventListener("click", closeAdmin);
+
+  document.querySelectorAll("#admin-panel [data-path]").forEach(input=>{
+    input.addEventListener("input", ()=> setPath(adminDraft, input.dataset.path, input.value));
+  });
+
+  document.getElementById("add-chapter-btn").addEventListener("click", ()=>{
+    adminDraft.video.chapters.push({time:"00:00", label:"New chapter"});
+    document.getElementById("admin-panel").innerHTML = buildAdminHtml(adminDraft);
+    bindAdminHandlers();
+  });
+  document.querySelectorAll("[data-remove-chapter]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      adminDraft.video.chapters.splice(+btn.dataset.removeChapter, 1);
+      document.getElementById("admin-panel").innerHTML = buildAdminHtml(adminDraft);
+      bindAdminHandlers();
+    });
+  });
+  document.querySelectorAll("[data-chapter-time]").forEach(inp=>{
+    inp.addEventListener("input", ()=> adminDraft.video.chapters[+inp.dataset.chapterTime].time = inp.value);
+  });
+  document.querySelectorAll("[data-chapter-label]").forEach(inp=>{
+    inp.addEventListener("input", ()=> adminDraft.video.chapters[+inp.dataset.chapterLabel].label = inp.value);
+  });
+
+  document.getElementById("add-wish-btn").addEventListener("click", ()=>{
+    adminDraft.wishlist.push({flag:"🌍", country:"New place", why:"", dreamDate:"", status:"someday"});
+    document.getElementById("admin-panel").innerHTML = buildAdminHtml(adminDraft);
+    bindAdminHandlers();
+  });
+  document.querySelectorAll("[data-remove-wish]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      adminDraft.wishlist.splice(+btn.dataset.removeWish, 1);
+      document.getElementById("admin-panel").innerHTML = buildAdminHtml(adminDraft);
+      bindAdminHandlers();
+    });
+  });
+  document.querySelectorAll("[data-wish-flag]").forEach(inp=> inp.addEventListener("input", ()=> adminDraft.wishlist[+inp.dataset.wishFlag].flag = inp.value));
+  document.querySelectorAll("[data-wish-country]").forEach(inp=> inp.addEventListener("input", ()=> adminDraft.wishlist[+inp.dataset.wishCountry].country = inp.value));
+  document.querySelectorAll("[data-wish-why]").forEach(inp=> inp.addEventListener("input", ()=> adminDraft.wishlist[+inp.dataset.wishWhy].why = inp.value));
+  document.querySelectorAll("[data-wish-status]").forEach(sel=> sel.addEventListener("change", ()=> adminDraft.wishlist[+sel.dataset.wishStatus].status = sel.value));
+
+  document.getElementById("sync-room").addEventListener("input", (e)=> adminDraft.sync.room = e.target.value.trim());
+  document.getElementById("sync-map-enabled").addEventListener("change", (e)=> adminDraft.sync.map.enabled = e.target.checked);
+  document.getElementById("sync-map-endpoint").addEventListener("input", (e)=> adminDraft.sync.map.endpoint = e.target.value.trim());
+  document.getElementById("sync-movie-enabled").addEventListener("change", (e)=> adminDraft.sync.movie.enabled = e.target.checked);
+  document.getElementById("sync-movie-endpoint").addEventListener("input", (e)=> adminDraft.sync.movie.endpoint = e.target.value.trim());
+  const syncStatusEl = document.getElementById("sync-status-admin");
+  if(syncStatusEl){
+    const mapLine = !CONFIG.sync.map.enabled ? "Map sync: not enabled."
+      : MapSync.lastStatus.connected ? `Map sync: connected${MapSync.lastStatus.peerOnline ? " · " + otherPersonName() + " is online" : " · waiting for " + otherPersonName()}`
+      : "Map sync: enabled, but not reachable — check this is deployed on Netlify.";
+    const movieLine = !CONFIG.sync.movie.enabled ? "Movie sync: not enabled."
+      : MovieSync.lastStatus.connected ? `Movie sync: connected${MovieSync.lastStatus.peerOnline ? " · " + otherPersonName() + " is online" : " · waiting for " + otherPersonName()}`
+      : "Movie sync: enabled, but not reachable — check this is deployed on Netlify.";
+    syncStatusEl.innerHTML = mapLine + "<br>" + movieLine;
+  }
+
+  document.getElementById("preview-unlock-toggle").addEventListener("change", (e)=>{
+    STATE.previewUnlockAll = e.target.checked;
+    saveState();
+  });
+  document.getElementById("reset-data-btn").addEventListener("click", ()=>{
+    if(confirm("This clears map pins, itinerary, and viewed status on this device. Continue?")){
+      localStorage.removeItem(LS_STATE);
+      STATE = defaultState();
+      toast("Data reset.");
+    }
+  });
+
+  document.getElementById("admin-save-btn").addEventListener("click", ()=>{
+    adminDraft.finalLetter.body = document.getElementById("letter-body-field").value.split("\n").filter(Boolean);
+    saveConfigOverride(adminDraft);
+    CONFIG = deepMerge(DEFAULT_CONFIG, adminDraft);
+    MapSync.stop(); MapSync.start();
+    MovieSync.stop(); MovieSync.start();
+    closeAdmin();
+    toast("Saved ✓");
+    render();
+  });
+}
+
+/* ============================================================
+   MAIN RENDER DISPATCH
+   ============================================================ */
+const ROUTES = {
+  "dashboard": renderDashboard,
+  "pizza":     renderPizza,
+  "astana":    renderAstana,
+  "wishlist":  renderWishlist,
+  "movie":     renderMovie,
+  "video":     renderVideo,
+  "memories":  renderMemories,
+  "final":     renderFinal
+};
+
+function render(){
+  clearInterval(pizzaTimerInterval); // stop background timers from the previous page
+  const route = window.location.hash.replace("#","");
+  if(!route){
+    renderLanding();
+    return;
+  }
+  const fn = ROUTES[route];
+  if(!fn){ navigate("dashboard"); return; }
+  fn();
+  window.scrollTo(0,0);
+}
+
+/* ---------- bootstrap ---------- */
+window.addEventListener("DOMContentLoaded", ()=>{
+  render();
+  setTimeout(()=>document.getElementById("transition-veil").classList.add("hidden"), 250);
+
+  document.getElementById("admin-toggle").addEventListener("click", openAdmin);
+
+  // Map and movie sync each poll their own Netlify Function in the
+  // background — works the moment this site is hosted on Netlify, no
+  // server of your own required, regardless of which page is showing.
+  MapSync.start();
+  MapSync.onStatusChange(()=>updateSyncPill(MapSync));
+
+  MovieSync.start();
+  MovieSync.onStatusChange(()=>updateSyncPill(MovieSync));
+});
+
+// keep the dashboard's unlock states fresh without disturbing other pages
+setInterval(()=>{
+  if(window.location.hash.replace("#","") === "dashboard") render();
+}, 30000);
+</script>
+
+</body>
+</html>
