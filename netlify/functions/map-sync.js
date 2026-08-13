@@ -5,22 +5,19 @@
 // no port to open. Works automatically the moment this site is
 // deployed on Netlify.
 //
-// One JSON blob per room. GET reads it, POST overwrites it with the
-// client's current full state (the client always sends its complete
-// markers + itinerary, never a partial diff, so a plain overwrite is
-// correct and simple). Presence is just "who last wrote", updated as
-// a side effect of that same write -- no separate heartbeat mechanism,
-// on purpose: a periodic heartbeat write was tried and it introduced a
-// race where it could land between a real edit and the next poll and
-// silently roll the edit back. Real edits don't happen often enough
-// for last-write-wins to be a problem, so this stays simple.
+// Content (pins + itinerary) and presence (heartbeats) are stored in
+// TWO SEPARATE keys on purpose. A presence-only heartbeat only ever
+// touches the presence key, never the content key -- so it can never
+// race with a real edit and roll it back, however often it fires.
 //
 //   GET  /.netlify/functions/map-sync?room=CODE
-//        -> { markers, itinerary, updatedAt, updatedBy, presence } or null
+//        -> { markers, itinerary, updatedAt, updatedBy, presence } or defaults
 //
 //   POST /.netlify/functions/map-sync?room=CODE
-//        body: { who, markers, itinerary }
-//        -> saves it and returns the new stored state
+//        body: { who, markers?, itinerary? }
+//        -> if markers/itinerary are present, saves them (a real edit);
+//           either way, refreshes presence for "who" and returns the
+//           current state
 //
 import { getStore } from "@netlify/blobs";
 
@@ -36,11 +33,22 @@ export default async (request) => {
   }
 
   const store = getStore({ name: "aug16-sync", consistency: "strong" });
-  const key = "map:" + room;
+  const contentKey = "map:content:" + room;
+  const presenceKey = "map:presence:" + room;
 
   if (request.method === "GET") {
-    const data = await store.get(key, { type: "json" });
-    return new Response(JSON.stringify(data || null), {
+    const [content, presence] = await Promise.all([
+      store.get(contentKey, { type: "json" }),
+      store.get(presenceKey, { type: "json" }),
+    ]);
+    const merged = {
+      markers: (content && content.markers) || [],
+      itinerary: (content && content.itinerary) || [],
+      updatedAt: (content && content.updatedAt) || 0,
+      updatedBy: (content && content.updatedBy) || null,
+      presence: presence || {},
+    };
+    return new Response(JSON.stringify(merged), {
       headers: { "content-type": "application/json" },
     });
   }
@@ -54,18 +62,31 @@ export default async (request) => {
     }
 
     const who = String(body.who || "unknown").slice(0, 40);
-    const existing = (await store.get(key, { type: "json" })) || {};
+    const hasContent = Array.isArray(body.markers) || Array.isArray(body.itinerary);
 
-    const merged = {
-      markers: Array.isArray(body.markers) ? body.markers : existing.markers || [],
-      itinerary: Array.isArray(body.itinerary) ? body.itinerary : existing.itinerary || [],
-      updatedAt: Date.now(),
-      updatedBy: who,
-      presence: { ...(existing.presence || {}), [who]: Date.now() },
-    };
+    // Presence: refreshed on every request, its own independent key.
+    const existingPresence = (await store.get(presenceKey, { type: "json" })) || {};
+    const newPresence = { ...existingPresence, [who]: Date.now() };
+    await store.setJSON(presenceKey, newPresence);
 
-    await store.setJSON(key, merged);
-    return new Response(JSON.stringify(merged), {
+    // Content: only written when the request actually carries pins/itinerary
+    // -- the client always sends its full current state (never a partial
+    // diff), so this is a plain overwrite, no prior read needed.
+    let contentOut;
+    if (hasContent) {
+      contentOut = {
+        markers: Array.isArray(body.markers) ? body.markers : [],
+        itinerary: Array.isArray(body.itinerary) ? body.itinerary : [],
+        updatedAt: Date.now(),
+        updatedBy: who,
+      };
+      await store.setJSON(contentKey, contentOut);
+    } else {
+      contentOut = (await store.get(contentKey, { type: "json" })) ||
+        { markers: [], itinerary: [], updatedAt: 0, updatedBy: null };
+    }
+
+    return new Response(JSON.stringify({ ...contentOut, presence: newPresence }), {
       headers: { "content-type": "application/json" },
     });
   }
