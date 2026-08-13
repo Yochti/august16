@@ -1,24 +1,26 @@
 // netlify/functions/map-sync.js
 //
 // Backs the Astana map's real-time sync using Netlify Blobs -- a
-// key/value store that's built into Netlify, with zero setup: no VPS,
-// no account to create, no port to open. It works automatically the
-// moment this site is deployed on Netlify.
+// key/value store built into Netlify: no VPS, no account to create,
+// no port to open. Works automatically the moment this site is
+// deployed on Netlify.
 //
-// Content (pins + itinerary) and presence (heartbeats) are stored in
-// TWO SEPARATE keys on purpose. A presence-only heartbeat now never
-// reads-then-rewrites the content key, so it can never race with a
-// real edit and silently roll it back -- which is exactly what was
-// happening when heartbeats and edits shared one key.
+// One JSON blob per room. GET reads it, POST overwrites it with the
+// client's current full state (the client always sends its complete
+// markers + itinerary, never a partial diff, so a plain overwrite is
+// correct and simple). Presence is just "who last wrote", updated as
+// a side effect of that same write -- no separate heartbeat mechanism,
+// on purpose: a periodic heartbeat write was tried and it introduced a
+// race where it could land between a real edit and the next poll and
+// silently roll the edit back. Real edits don't happen often enough
+// for last-write-wins to be a problem, so this stays simple.
 //
 //   GET  /.netlify/functions/map-sync?room=CODE
-//        -> { markers, itinerary, updatedAt, updatedBy, presence } or defaults
+//        -> { markers, itinerary, updatedAt, updatedBy, presence } or null
 //
 //   POST /.netlify/functions/map-sync?room=CODE
-//        body: { who, markers?, itinerary? }
-//        -> if markers/itinerary are present, saves them (a real edit);
-//           either way, refreshes presence for "who" and returns the
-//           current state
+//        body: { who, markers, itinerary }
+//        -> saves it and returns the new stored state
 //
 import { getStore } from "@netlify/blobs";
 
@@ -33,25 +35,12 @@ export default async (request) => {
     });
   }
 
-  // "strong" consistency = read-your-own-write is immediate, which matters
-  // here since both people can poll within a couple of seconds of a change.
   const store = getStore({ name: "aug16-sync", consistency: "strong" });
-  const contentKey = "map:content:" + room;
-  const presenceKey = "map:presence:" + room;
+  const key = "map:" + room;
 
   if (request.method === "GET") {
-    const [content, presence] = await Promise.all([
-      store.get(contentKey, { type: "json" }),
-      store.get(presenceKey, { type: "json" }),
-    ]);
-    const merged = {
-      markers: (content && content.markers) || [],
-      itinerary: (content && content.itinerary) || [],
-      updatedAt: (content && content.updatedAt) || 0,
-      updatedBy: (content && content.updatedBy) || null,
-      presence: presence || {},
-    };
-    return new Response(JSON.stringify(merged), {
+    const data = await store.get(key, { type: "json" });
+    return new Response(JSON.stringify(data || null), {
       headers: { "content-type": "application/json" },
     });
   }
@@ -65,32 +54,18 @@ export default async (request) => {
     }
 
     const who = String(body.who || "unknown").slice(0, 40);
-    const hasContent = Array.isArray(body.markers) || Array.isArray(body.itinerary);
+    const existing = (await store.get(key, { type: "json" })) || {};
 
-    // Presence: always refreshed, always its own independent key.
-    const existingPresence = (await store.get(presenceKey, { type: "json" })) || {};
-    const newPresence = { ...existingPresence, [who]: Date.now() };
-    await store.setJSON(presenceKey, newPresence);
+    const merged = {
+      markers: Array.isArray(body.markers) ? body.markers : existing.markers || [],
+      itinerary: Array.isArray(body.itinerary) ? body.itinerary : existing.itinerary || [],
+      updatedAt: Date.now(),
+      updatedBy: who,
+      presence: { ...(existing.presence || {}), [who]: Date.now() },
+    };
 
-    // Content: only touched (and only ever fully overwritten, never
-    // read-modified) when the request actually carries pins/itinerary --
-    // the client always sends its full current state, never a partial
-    // diff, so a plain overwrite is correct and needs no prior read.
-    let contentOut;
-    if (hasContent) {
-      contentOut = {
-        markers: Array.isArray(body.markers) ? body.markers : [],
-        itinerary: Array.isArray(body.itinerary) ? body.itinerary : [],
-        updatedAt: Date.now(),
-        updatedBy: who,
-      };
-      await store.setJSON(contentKey, contentOut);
-    } else {
-      contentOut = (await store.get(contentKey, { type: "json" })) ||
-        { markers: [], itinerary: [], updatedAt: 0, updatedBy: null };
-    }
-
-    return new Response(JSON.stringify({ ...contentOut, presence: newPresence }), {
+    await store.setJSON(key, merged);
+    return new Response(JSON.stringify(merged), {
       headers: { "content-type": "application/json" },
     });
   }
