@@ -1145,7 +1145,7 @@ function drawRoute(){
 }
 
 function broadcastMapState(){
-  MapSync.push();
+  MapSync.push({ markers: getMarkers(), itinerary: STATE.itinerary });
 }
 
 /* ============================================================
@@ -1299,7 +1299,20 @@ function makePollSync(channelName, defaultEndpoint, defaultPollMs){
           this.lastUpdatedAt = data.updatedAt;
           if(data.updatedBy !== myClientId()) this._dataListeners.forEach(fn => fn(data));
         }
+        this._heartbeat(); // "I'm still here" — safe now: the server keeps
+                            // presence in a separate key from the actual
+                            // content, so this can never overwrite an edit.
       }catch(err){ this._setStatus(false, null); }
+    },
+    async _heartbeat(){
+      try{
+        const res = await fetch(this._url(), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ who: myClientId() }) // no markers/itinerary -> presence-only write
+        });
+        if(res.ok){ const data = await res.json(); this._setStatus(true, data); }
+      }catch(err){ /* next poll cycle retries — a missed heartbeat isn't critical */ }
     },
     async push(payload){
       if(!this.isEnabled()) return;
@@ -1337,9 +1350,6 @@ MapSync.onData((data)=>{
   }
   toast(`🌆 ${otherPersonName()} updated the map`);
 });
-function broadcastMapStatePayload(){
-  return { markers: getMarkers(), itinerary: STATE.itinerary };
-}
 
 const MovieSync = {
   _timer: null,
@@ -1371,6 +1381,7 @@ const MovieSync = {
       const data = await res.json();
       this._setStatus(true, data);
       this._processIncoming(data);
+      this._post({}); // heartbeat — presence-only write, safe now that content lives in its own key server-side
     }catch(err){ this._setStatus(false, null); }
   },
   async _post(body){
