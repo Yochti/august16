@@ -1299,22 +1299,7 @@ function makePollSync(channelName, defaultEndpoint, defaultPollMs){
           this.lastUpdatedAt = data.updatedAt;
           if(data.updatedBy !== myClientId()) this._dataListeners.forEach(fn => fn(data));
         }
-        this._heartbeat(); // tell the other side "I'm still here" even if I haven't changed anything
       }catch(err){ this._setStatus(false, null); }
-    },
-    async _heartbeat(){
-      // A POST with no data fields — the function just refreshes my presence
-      // timestamp and leaves markers/itinerary untouched. Without this,
-      // presence only updates when someone actively edits something, so two
-      // people just looking at the page would show "waiting for them" forever.
-      try{
-        const res = await fetch(this._url(), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ who: myClientId() })
-        });
-        if(res.ok){ const data = await res.json(); this._setStatus(true, data); }
-      }catch(err){ /* the next poll cycle will retry — a missed heartbeat isn't critical */ }
     },
     async push(payload){
       if(!this.isEnabled()) return;
@@ -1386,7 +1371,6 @@ const MovieSync = {
       const data = await res.json();
       this._setStatus(true, data);
       this._processIncoming(data);
-      this._post({}); // heartbeat -- keeps presence fresh even when nobody's actively playing/reacting
     }catch(err){ this._setStatus(false, null); }
   },
   async _post(body){
