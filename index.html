@@ -635,7 +635,7 @@ const DEFAULT_CONFIG = {
   movie: {
     title: "Jojo rabbit",
     // paste a legally-licensed embed link here, e.g. Vimeo (private) or YouTube (unlisted)
-    embedUrl: ""
+    embedUrl: "https://player.vidlove.cc/embed/movie/515001"
   },
 
   finalLetter: {
@@ -902,7 +902,7 @@ function renderDashboard(){
 
   shell(`
     <div class="dash-header">
-      <div class="eyebrow">16 · 08 · 2026 — Astana time</div>
+      <div class="eyebrow">16 · 08 · 2026 Astana time</div>
       <h1 class="h-display text-gold-gradient">Our day.</h1>
       <div class="dash-sub">${CONFIG.couple.him.toUpperCase()} × ${CONFIG.couple.her.toUpperCase()} · long-distance itinerary</div>
       <div class="progress-rail"><div class="progress-fill" id="progress-fill" style="width:${pct}%"></div></div>
@@ -959,7 +959,7 @@ function renderPizza(){
         <div class="pizza-ready">
           <h2 class="h-display">Pizza is here.</h2>
           <p class="lede" style="margin:0 auto 26px;">Call me. ❤️</p>
-          <button class="btn btn-primary" onclick="toast('📞 Go on — call.')">Call now</button>
+          <button class="btn btn-primary" onclick="toast('📞 Go on call.')">Call now</button>
         </div>
         ${trackingHtml}
       `;
